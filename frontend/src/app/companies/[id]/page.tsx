@@ -9,6 +9,7 @@ export default function CompanyDetailsPage() {
   const { id } = useParams()
   const router = useRouter()
   const [company, setCompany] = useState<any>(null)
+  const [history, setHistory] = useState<any[]>([])
 
   // Automation Form states
   const [periodo, setPeriodo] = useState('')
@@ -75,6 +76,15 @@ export default function CompanyDetailsPage() {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}`)
       .then(res => res.json())
       .then(data => setCompany(data))
+      
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/historico`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setHistory(data)
+        }
+      })
+      .catch(err => console.error("Erro ao buscar histórico:", err))
   }, [id])
 
   async function handleAutomatedFlow(e: React.FormEvent) {
@@ -344,6 +354,50 @@ export default function CompanyDetailsPage() {
             {isProcessing ? 'Processando...' : (syncSieg ? 'Processar e Conciliar com SIEG' : 'Processar Arquivos Localmente')}
           </button>
         </form>
+      </div>
+
+      {/* Histórico de Conciliações */}
+      <div className="mt-12">
+        <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2 mb-6">
+          <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
+        </h2>
+        {history.length === 0 ? (
+          <div className="glass-card rounded-xl p-8 text-center text-[var(--foreground-muted)]">
+            Nenhuma conciliação processada para esta empresa ainda.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {history.map((h, idx) => (
+              <div key={idx} className="glass-card rounded-xl p-6 relative group border border-white/5 hover:border-[var(--gold-border)] transition-all flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="text-2xl font-bold text-[var(--foreground)]">{h.periodo}</div>
+                  <Link href={`/reconciliations/${id}/${h.periodo}`} className="text-xs font-bold text-[var(--gold)] bg-[var(--gold-glow)] px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    Ver Relatório
+                  </Link>
+                </div>
+                <div className="space-y-2 text-sm flex-grow">
+                  <div className="flex justify-between">
+                    <span className="text-[var(--foreground-muted)]">Total Registros</span>
+                    <span className="text-[var(--foreground)] font-medium">{h.total}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--foreground-muted)]">Conciliados (OK)</span>
+                    <span className="text-green-400 font-medium">{h.ok}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-[var(--foreground-muted)]">Pendências</span>
+                    <span className="text-red-400 font-medium">{(h.divergente || 0) + (h.faltante || 0)}</span>
+                  </div>
+                </div>
+                {h.last_run && (
+                  <div className="mt-4 pt-4 border-t border-white/10 text-xs text-[var(--foreground-muted)]">
+                    Última execução: {new Date(h.last_run).toLocaleDateString('pt-BR')} às {new Date(h.last_run).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
     </div>

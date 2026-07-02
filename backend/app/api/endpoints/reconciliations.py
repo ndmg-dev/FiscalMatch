@@ -10,6 +10,43 @@ import json
 
 router = APIRouter()
 
+@router.get("/{empresa_id}/historico")
+def get_historico(empresa_id: str, db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    
+    # Query to group reconciliations by period for this company
+    recent_raw = (
+        db.query(
+            Conciliacao.periodo,
+            func.count(Conciliacao.id).label("total"),
+            func.max(Conciliacao.created_at).label("last_run"),
+        )
+        .filter(Conciliacao.empresa_id == empresa_id)
+        .group_by(Conciliacao.periodo)
+        .order_by(func.max(Conciliacao.created_at).desc())
+        .all()
+    )
+
+    history = []
+    for r in recent_raw:
+        # Get status breakdown for this specific period
+        statuses = dict(
+            db.query(Conciliacao.status, func.count(Conciliacao.id))
+            .filter(Conciliacao.empresa_id == empresa_id, Conciliacao.periodo == r.periodo)
+            .group_by(Conciliacao.status)
+            .all()
+        )
+        history.append({
+            "periodo": r.periodo,
+            "total": r.total,
+            "ok": statuses.get("OK", 0),
+            "faltante": statuses.get("FALTANTE", 0),
+            "divergente": statuses.get("DIVERGENTE", 0),
+            "last_run": r.last_run.isoformat() if r.last_run else None,
+        })
+        
+    return history
+
 @router.post("")
 def run_reconciliation(empresa_id: str, periodo: str, sync_sieg: bool = False, db: Session = Depends(get_db)):
     empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
