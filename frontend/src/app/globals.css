@@ -1,0 +1,396 @@
+@import "tailwindcss";
+
+:root {
+  /* Dark + Gold palette inspired by the MG Prospect AI screenshot */
+  --background: #0a0a0a;
+  --background-subtle: #111111;
+  --foreground: #f0ece4;
+  --foreground-muted: #8a8478;
+  --gold: #c9a84c;
+  --gold-light: #d4b85c;
+  --gold-dark: #a88a3a;
+  --gold-glow: rgba(201, 168, 76, 0.15);
+  --gold-border: rgba(201, 168, 76, 0.25);
+  --card-bg: rgba(18, 18, 18, 0.85);
+  --card-border: rgba(201, 168, 76, 0.12);
+  --sidebar-bg: #0e0e0e;
+  --sidebar-border: rgba(201, 168, 76, 0.08);
+  --input-bg: rgba(20, 20, 20, 0.9);
+  --input-border: rgba(201, 168, 76, 0.2);
+  --success: #4ade80;
+  --error: #f87171;
+  --warning: #fbbf24;
+}
+
+/* ── Base ────────────────────────────────────────────── */
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', sans-serif;
+  position: relative;
+}
+
+/* Animated gold particles effect (like the screenshot) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(1px 1px at 10% 20%, rgba(201, 168, 76, 0.4) 0%, transparent 100%),
+    radial-gradient(1px 1px at 80% 10%, rgba(201, 168, 76, 0.3) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 50% 50%, rgba(201, 168, 76, 0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 30% 70%, rgba(201, 168, 76, 0.35) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 80%, rgba(201, 168, 76, 0.25) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 90% 40%, rgba(201, 168, 76, 0.3) 0%, transparent 100%),
+    radial-gradient(1px 1px at 15% 90%, rgba(201, 168, 76, 0.2) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 30%, rgba(201, 168, 76, 0.15) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 0;
+  animation: shimmer 20s ease-in-out infinite alternate;
+}
+
+@keyframes shimmer {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
+/* ── Sidebar ─────────────────────────────────────────── */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  overflow-y: auto;
+}
+
+.sidebar-logo {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid var(--sidebar-border);
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--foreground-muted);
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.sidebar-link:hover {
+  background: var(--gold-glow);
+  color: var(--gold-light);
+}
+
+.sidebar-link.active {
+  background: var(--gold-glow);
+  color: var(--gold);
+  border: 1px solid var(--gold-border);
+}
+
+.sidebar-link svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--sidebar-border);
+  font-size: 12px;
+  color: var(--foreground-muted);
+}
+
+/* ── Main content area ───────────────────────────────── */
+.main-content {
+  margin-left: 260px;
+  min-height: 100vh;
+  padding: 32px 40px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Glass Card ──────────────────────────────────────── */
+.glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(201, 168, 76, 0.1);
+  border-color: rgba(201, 168, 76, 0.3);
+}
+
+/* ── Gold Button ─────────────────────────────────────── */
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: #0a0a0a;
+  font-weight: 600;
+  transition: all 0.25s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(201, 168, 76, 0.35);
+}
+
+.btn-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Ghost / subtle button ───────────────────────────── */
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--foreground-muted);
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  border-color: var(--gold-border);
+  color: var(--gold-light);
+  background: var(--gold-glow);
+}
+
+/* ── Input fields ────────────────────────────────────── */
+.input-field {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: var(--foreground);
+  font-size: 14px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+.input-field::placeholder {
+  color: var(--foreground-muted);
+  opacity: 0.6;
+}
+
+/* ── File input ──────────────────────────────────────── */
+.file-input {
+  width: 100%;
+  color: var(--foreground-muted);
+  font-size: 14px;
+}
+
+.file-input::file-selector-button {
+  margin-right: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--gold-border);
+  background: var(--gold-glow);
+  color: var(--gold);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-input::file-selector-button:hover {
+  background: rgba(201, 168, 76, 0.25);
+  border-color: var(--gold);
+}
+
+/* ── Status badges ───────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 1px solid;
+}
+
+.badge-ok { background: rgba(74, 222, 128, 0.12); color: #4ade80; border-color: rgba(74, 222, 128, 0.25); }
+.badge-missing { background: rgba(248, 113, 113, 0.12); color: #f87171; border-color: rgba(248, 113, 113, 0.25); }
+.badge-unmatched { background: rgba(251, 191, 36, 0.12); color: #fbbf24; border-color: rgba(251, 191, 36, 0.25); }
+.badge-divergent { background: rgba(251, 146, 60, 0.12); color: #fb923c; border-color: rgba(251, 146, 60, 0.25); }
+.badge-ignored { background: rgba(148, 163, 184, 0.12); color: #94a3b8; border-color: rgba(148, 163, 184, 0.25); }
+
+/* ── Message/alert boxes ─────────────────────────────── */
+.alert-info {
+  padding: 14px 18px;
+  background: var(--gold-glow);
+  border: 1px solid var(--gold-border);
+  border-radius: 10px;
+  color: var(--gold-light);
+  font-size: 14px;
+}
+
+.alert-error {
+  padding: 14px 18px;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  border-radius: 10px;
+  color: #fca5a5;
+  font-size: 14px;
+}
+
+/* ── Table ───────────────────────────────────────────── */
+.table-header {
+  background: rgba(201, 168, 76, 0.05);
+}
+
+.table-header th {
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--foreground-muted);
+}
+
+.table-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  transition: background 0.15s ease;
+}
+
+.table-row:hover {
+  background: rgba(201, 168, 76, 0.04);
+}
+
+.table-row td {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+/* ── Page title with icon ────────────────────────────── */
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.page-title svg {
+  color: var(--gold);
+  width: 28px;
+  height: 28px;
+}
+
+/* ── Animations ──────────────────────────────────────── */
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(201, 168, 76, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201, 168, 76, 0.4); }
+
+/* ── Gold accent line ────────────────────────────────── */
+.gold-accent {
+  border-top: 2px solid var(--gold);
+}
+
+/* ── Gold gradient text ──────────────────────────────── */
+.text-gold-gradient {
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* -- Ambient Background Blobs -------------------------- */
+.bg-blobs {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob {
+  position: absolute;
+  filter: blur(90px);
+  opacity: 0.35;
+  animation: blob-float 25s infinite alternate ease-in-out;
+  border-radius: 50%;
+}
+
+.blob-1 {
+  width: 500px;
+  height: 500px;
+  background: var(--gold-dark);
+  top: -150px;
+  left: -100px;
+}
+
+.blob-2 {
+  width: 600px;
+  height: 600px;
+  background: var(--gold);
+  bottom: -200px;
+  right: -150px;
+  animation-delay: -5s;
+}
+
+.blob-3 {
+  width: 400px;
+  height: 400px;
+  background: var(--gold-light);
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -10s;
+  opacity: 0.15;
+}
+
+@keyframes blob-float {
+  0% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -60px) scale(1.1); }
+  66% { transform: translate(-30px, 30px) scale(0.9); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+

@@ -66,7 +66,7 @@ services:
     environment:
       - POSTGRES_HOST=db
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/fiscalmatch
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/fiscalmatch}
       - MINIO_ENDPOINT=minio:9000
       - SIEG_API_KEY=${SIEG_API_KEY}
       - SIEG_EMAIL=${SIEG_EMAIL}
@@ -81,7 +81,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       - backend
 
