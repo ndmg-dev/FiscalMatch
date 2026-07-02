@@ -9,7 +9,7 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/`)
       .then(res => res.json())
       .then(data => {
         setCompanies(data)

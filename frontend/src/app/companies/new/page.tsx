@@ -23,7 +23,7 @@ export default function NewCompanyPage() {
     }
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
