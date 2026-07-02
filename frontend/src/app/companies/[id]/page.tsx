@@ -123,9 +123,12 @@ export default function CompanyDetailsPage() {
         })
         if (!xmlRes.ok) throw new Error('Erro ao fazer upload dos XMLs')
         
+        const xmlResData = await xmlRes.json()
+        const totalXmls = xmlResData.results ? xmlResData.results.length : xmlFilesMain.length
+        
         setLogs(prev => [
           ...prev.slice(0, -1),
-          { message: `${xmlFilesMain.length} arquivos XML processados com sucesso.`, status: 'done' },
+          { message: `${totalXmls} arquivos XML processados com sucesso.`, status: 'done' },
         ])
       }
 
