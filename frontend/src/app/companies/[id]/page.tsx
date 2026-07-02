@@ -307,7 +307,7 @@ export default function CompanyDetailsPage() {
               </label>
               <input
                 type="file"
-                accept=".xml"
+                accept=".xml,.zip"
                 multiple
                 onChange={e => setXmlFilesMain(e.target.files)}
                 className="file-input w-full"
