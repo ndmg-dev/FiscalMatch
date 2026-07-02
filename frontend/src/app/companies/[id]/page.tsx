@@ -381,20 +381,20 @@ export default function CompanyDetailsPage() {
                 <div className="space-y-2 text-sm flex-grow">
                   <div className="flex justify-between">
                     <span className="text-[var(--foreground-muted)]">Total Registros</span>
-                    <span className="text-[var(--foreground)] font-medium">{h.total}</span>
+                    <span className="text-[var(--foreground)] font-medium">{Number(h.total).toLocaleString('pt-BR')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--foreground-muted)]">Conciliados (OK)</span>
-                    <span className="text-green-400 font-medium">{h.ok}</span>
+                    <span className="text-green-400 font-medium">{Number(h.ok).toLocaleString('pt-BR')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[var(--foreground-muted)]">Pendências</span>
-                    <span className="text-red-400 font-medium">{(h.divergente || 0) + (h.faltante || 0)}</span>
+                    <span className="text-red-400 font-medium">{Number((h.divergente || 0) + (h.faltante || 0)).toLocaleString('pt-BR')}</span>
                   </div>
                 </div>
                 {h.last_run && (
                   <div className="mt-4 pt-4 border-t border-white/10 text-xs text-[var(--foreground-muted)]">
-                    Última execução: {new Date(h.last_run).toLocaleDateString('pt-BR')} às {new Date(h.last_run).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
+                    Última execução: {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleDateString('pt-BR')} às {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
                   </div>
                 )}
               </div>
