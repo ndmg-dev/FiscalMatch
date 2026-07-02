@@ -36,8 +36,10 @@ services:
     container_name: fiscalmatch_backend
     environment:
       - POSTGRES_HOST=db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-fiscalmatch}
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/fiscalmatch
       - MINIO_ENDPOINT=minio:9000
       - SIEG_API_KEY=${SIEG_API_KEY}
       - SIEG_EMAIL=${SIEG_EMAIL}
@@ -56,8 +58,10 @@ services:
     command: ["python", "worker.py"]
     environment:
       - POSTGRES_HOST=db
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-fiscalmatch}
       - REDIS_URL=redis://redis:6379/0
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@db:5432/fiscalmatch}
       - MINIO_ENDPOINT=minio:9000
       - SIEG_API_KEY=${SIEG_API_KEY}
       - SIEG_EMAIL=${SIEG_EMAIL}
