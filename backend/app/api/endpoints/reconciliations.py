@@ -1,0 +1,137 @@
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse, Response
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models.company import Empresa
+from app.models.reconciliation import Conciliacao
+from app.services.reconciliation import ReconciliationService
+from app.services.exporter import ExporterService
+import json
+
+router = APIRouter()
+
+@router.post("")
+def run_reconciliation(empresa_id: str, periodo: str, sync_sieg: bool = False, db: Session = Depends(get_db)):
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    if sync_sieg:
+        from app.services.sieg_connector import SiegConnector
+        from app.services.xml_parser import XMLParser
+        from app.models.xml import DocumentoXML
+        import base64
+        
+        sieg = SiegConnector()
+        sieg_result = sieg.sync_documents(empresa.cnpj, periodo)
+        
+        if sieg_result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=sieg_result.get("message", "Erro na API da SIEG"))
+        
+        if sieg_result.get("status") == "success":
+            for xml_b64 in sieg_result.get("xmls", []):
+                try:
+                    xml_bytes = base64.b64decode(xml_b64)
+                    parsed = XMLParser.parse(xml_bytes)
+                    
+                    # Upsert by chave_nfe
+                    existing = db.query(DocumentoXML).filter(DocumentoXML.chave_nfe == parsed["chave_nfe"]).first()
+                    if existing:
+                        for k, v in parsed.items():
+                            setattr(existing, k, v)
+                        existing.origem = "SIEG"
+                    else:
+                        new_xml = DocumentoXML(
+                            empresa_id=empresa_id,
+                            origem="SIEG",
+                            **parsed
+                        )
+                        db.add(new_xml)
+                except Exception as e:
+                    print(f"Erro ao parsear XML do Sieg: {e}")
+            db.commit()
+
+    # Clear previous reconciliations for the period
+    db.query(Conciliacao).filter(
+        Conciliacao.empresa_id == empresa_id,
+        Conciliacao.periodo == periodo
+    ).delete()
+    db.commit()
+
+    # Run synchronously for MVP simplicity, or could be enqueued
+    svc = ReconciliationService(db, empresa_id, periodo)
+    results = svc.run()
+
+    docs_to_insert = []
+    for r in results:
+        docs_to_insert.append(Conciliacao(
+            empresa_id=empresa_id,
+            periodo=periodo,
+            **r
+        ))
+    if docs_to_insert:
+        db.bulk_save_objects(docs_to_insert)
+    db.commit()
+
+    warning = None
+    if sync_sieg and 'sieg_result' in locals():
+        if sieg_result.get("downloaded_count", 0) == 0 and "Nenhum documento" in sieg_result.get("message", ""):
+            warning = "Nenhum XML foi localizado na SIEG. Verifique se o Certificado A1 está cadastrado no painel deles."
+
+    return {"message": "Conciliação executada com sucesso", "total_registros": len(results), "warning": warning}
+
+@router.get("/{empresa_id}/{periodo}/relatorio")
+def get_relatorio(empresa_id: str, periodo: str, limit: int = None, db: Session = Depends(get_db)):
+    from app.models.xml import DocumentoXML
+    from app.models.sped import DocumentoSped
+    
+    query = db.query(Conciliacao, DocumentoXML, DocumentoSped)\
+        .outerjoin(DocumentoXML, Conciliacao.documento_fiscal_id == DocumentoXML.id)\
+        .outerjoin(DocumentoSped, Conciliacao.documento_sped_id == DocumentoSped.id)\
+        .filter(
+            Conciliacao.empresa_id == empresa_id,
+            Conciliacao.periodo == periodo
+        )
+        
+    if limit is not None:
+        query = query.limit(limit)
+        
+    records = query.all()
+    
+    report = []
+    for r, xml, sped in records:
+        report.append({
+            "id": str(r.id),
+            "status": r.status,
+            "chave_nfe": xml.chave_nfe if xml else (sped.chave_nfe if sped else None),
+            "cnpj_emitente": xml.cnpj_emitente if xml else (sped.cnpj_part if sped else None),
+            "cnpj_destinatario": xml.cnpj_destinatario if xml else None,
+            "nome_participante": sped.nome_part if sped else None,
+            "modelo": xml.modelo if xml else (sped.modelo if sped else None),
+            "serie": xml.serie if xml else (sped.serie if sped else None),
+            "numero": xml.numero if xml else (sped.numero if sped else None),
+            "data_emissao": xml.data_emissao.strftime("%d/%m/%Y") if xml and xml.data_emissao else (sped.data_doc.strftime("%d/%m/%Y") if sped and sped.data_doc else None),
+            "data_entrada_saida": sped.data_entrada_saida.strftime("%d/%m/%Y") if sped and sped.data_entrada_saida else None,
+            "valor_xml": float(xml.valor_total) if xml and xml.valor_total else None,
+            "valor_sped": float(sped.valor_doc) if sped and sped.valor_doc else None,
+            "diferenca": r.diferencas_json,
+            "situacao_nota": xml.situacao if xml else (sped.cod_sit if sped else None),
+            "origem_documento": xml.origem if xml else None,
+            "observacao": r.observacao
+        })
+        
+    return report
+
+@router.get("/{empresa_id}/{periodo}/exportar.xlsx")
+def export_excel(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
+    data = get_relatorio(empresa_id, periodo, limit=None, db=db)
+    file_bytes = ExporterService.export_excel(data)
+    headers = {'Content-Disposition': f'attachment; filename="conciliacao_{periodo}.xlsx"'}
+    return Response(file_bytes, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@router.get("/{empresa_id}/{periodo}/exportar.csv")
+def export_csv(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
+    data = get_relatorio(empresa_id, periodo, limit=None, db=db)
+    csv_str = ExporterService.export_csv(data)
+    headers = {'Content-Disposition': f'attachment; filename="conciliacao_{periodo}.csv"'}
+    return Response(csv_str, headers=headers, media_type='text/csv')
