@@ -13,17 +13,23 @@ export default function ReconciliationReportPage() {
   const warning = searchParams.get('warning')
 
   const [report, setReport] = useState<any[]>([])
+  const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000`)
-      .then(res => res.json())
-      .then(data => {
-        setReport(data)
-        setLoading(false)
-      })
+    Promise.all([
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000`).then(res => res.json()),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/historico`).then(res => res.json())
+    ]).then(([reportData, historyData]) => {
+      setReport(reportData)
+      if (Array.isArray(historyData)) {
+        const periodStats = historyData.find(h => h.periodo === periodo)
+        if (periodStats) setStats(periodStats)
+      }
+      setLoading(false)
+    })
   }, [empresa_id, periodo])
 
   const toggleRow = (id: string) => {
@@ -75,7 +81,13 @@ export default function ReconciliationReportPage() {
   const uniqueStatuses = Array.from(new Set(report.map(r => r.status)))
   const filteredReport = statusFilter === 'ALL' ? report : report.filter(r => r.status === statusFilter)
 
-  const statusCounts = report.reduce((acc, curr) => {
+  // Use stats from backend if available, otherwise fallback to calculating from loaded records
+  const displayStats = stats ? {
+    'OK': stats.ok,
+    'FALTANTE': stats.faltante,
+    'DIVERGENTE': stats.divergente,
+    'Total Registros': stats.total
+  } : report.reduce((acc, curr) => {
     acc[curr.status] = (acc[curr.status] || 0) + 1
     return acc
   }, {} as Record<string, number>)
@@ -146,7 +158,7 @@ export default function ReconciliationReportPage() {
       {/* Status Summary Scroller */}
       {report.length > 0 && (
         <div className="flex gap-4 overflow-x-auto py-4 px-2 -mx-2 hide-scrollbar snap-x">
-          {Object.entries(statusCounts).map(([status, count]) => (
+          {Object.entries(displayStats).map(([status, count]) => (
             <div 
               key={status} 
               onClick={() => setStatusFilter(statusFilter === status ? 'ALL' : status)}
