@@ -99,7 +99,7 @@ def upload_xml(
 
     # 2. Buscar no banco de dados quais chaves já existem (Batch Query)
     chaves = [item["parsed"]["chave_nfe"] for item in parsed_xmls if "chave_nfe" in item["parsed"]]
-    existing_docs = db.query(DocumentoXML).filter(DocumentoXML.chave_nfe.in_(chaves)).all()
+    existing_docs = db.query(DocumentoXML).filter(DocumentoXML.empresa_id == empresa_id, DocumentoXML.chave_nfe.in_(chaves)).all()
     existing_map = {doc.chave_nfe: doc for doc in existing_docs}
 
     # 3. Processar inserções e atualizações em memória
@@ -141,7 +141,7 @@ def upload_xml(
 
     # 4. Salvar no banco em lote
     if new_docs:
-        db.bulk_save_objects(new_docs)
+        db.add_all(new_docs)
     
     try:
         db.commit()
