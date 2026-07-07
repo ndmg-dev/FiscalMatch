@@ -298,7 +298,7 @@ export default function CompanyDetailsPage() {
                       value={periodo}
                       onChange={e => setPeriodo(e.target.value)}
                       placeholder="Ex: 2026-05"
-                      className="input-field w-full pl-12 cursor-pointer"
+                      className="input-field w-full !pl-12 cursor-pointer"
                       required
                       disabled={isProcessing}
                       onClick={() => setIsCalendarOpen(!isCalendarOpen)}
