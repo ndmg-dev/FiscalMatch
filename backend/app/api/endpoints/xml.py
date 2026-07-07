@@ -187,3 +187,35 @@ def get_xml_summary(empresa_id: str, db: Session = Depends(get_db)):
             "valor_total": float(row.valor_total) if row.valor_total else 0.0
         } for row in query
     ]
+
+@router.get("/list")
+def list_xmls(empresa_id: str, mes: str = None, limit: int = 1000, db: Session = Depends(get_db)):
+    """
+    Returns a list of XMLs for the given company, optionally filtered by month (YYYY-MM).
+    """
+    from sqlalchemy import func
+    from app.models.xml import DocumentoXML
+    
+    query = db.query(DocumentoXML).filter(DocumentoXML.empresa_id == empresa_id)
+    
+    if mes:
+        query = query.filter(func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == mes)
+        
+    query = query.order_by(DocumentoXML.data_emissao.desc()).limit(limit)
+    xmls = query.all()
+    
+    return [
+        {
+            "id": str(xml.id),
+            "chave_nfe": xml.chave_nfe,
+            "cnpj_emitente": xml.cnpj_emitente,
+            "cnpj_destinatario": xml.cnpj_destinatario,
+            "modelo": xml.modelo,
+            "serie": xml.serie,
+            "numero": xml.numero,
+            "data_emissao": xml.data_emissao.strftime("%d/%m/%Y %H:%M") if xml.data_emissao else None,
+            "valor_total": float(xml.valor_total) if xml.valor_total else 0.0,
+            "situacao": xml.situacao,
+            "origem": xml.origem
+        } for xml in xmls
+    ]

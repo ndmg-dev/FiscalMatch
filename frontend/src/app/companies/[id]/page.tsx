@@ -28,6 +28,26 @@ export default function CompanyDetailsPage() {
   
   // Base de Dados states
   const [xmlSummary, setXmlSummary] = useState<any[]>([])
+  const [xmlList, setXmlList] = useState<any[]>([])
+  const [selectedXmlMonth, setSelectedXmlMonth] = useState<string | null>(null)
+  const [loadingXmls, setLoadingXmls] = useState(false)
+
+  const fetchXmlsForMonth = async (mes: string | null) => {
+    setSelectedXmlMonth(mes)
+    setLoadingXmls(true)
+    try {
+      const url = mes 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/list?mes=${mes}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/list`
+      const res = await fetch(url)
+      const data = await res.json()
+      setXmlList(data)
+    } catch (err) {
+      console.error("Erro ao buscar xmls", err)
+    } finally {
+      setLoadingXmls(false)
+    }
+  }
   
   // Auditoria states
   const [auditPeriod, setAuditPeriod] = useState('')
@@ -99,7 +119,10 @@ export default function CompanyDetailsPage() {
       
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
       .then(res => res.json())
-      .then(data => setXmlSummary(data))
+      .then(data => {
+        setXmlSummary(data)
+        fetchXmlsForMonth(null) // Load all XMLs initially
+      })
       .catch(err => console.error("Erro ao buscar resumo XML:", err))
   }, [id])
 
@@ -503,9 +526,13 @@ export default function CompanyDetailsPage() {
 
           <div className="glass-card rounded-2xl p-8">
             <h2 className="text-2xl font-bold text-[var(--foreground)] mb-6">Volume de XMLs na Base</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
               {xmlSummary.map((sum, i) => (
-                <div key={i} className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div 
+                  key={i} 
+                  onClick={() => fetchXmlsForMonth(selectedXmlMonth === sum.mes ? null : sum.mes)}
+                  className={`bg-white/5 rounded-xl p-5 border cursor-pointer transition-all ${selectedXmlMonth === sum.mes ? 'border-[var(--gold)] bg-[var(--gold-glow)] shadow-[0_0_15px_rgba(201,168,76,0.2)]' : 'border-white/10 hover:border-[var(--gold-border)] hover:bg-[var(--card-bg)]'}`}
+                >
                   <div className="text-[var(--gold)] font-bold text-lg mb-2">{sum.mes}</div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-[var(--foreground-muted)]">Quantidade:</span>
@@ -522,6 +549,69 @@ export default function CompanyDetailsPage() {
               {xmlSummary.length === 0 && (
                 <div className="col-span-full text-center py-8 text-[var(--foreground-muted)]">Nenhum XML na base de dados.</div>
               )}
+            </div>
+
+            {/* XML List Grid */}
+            <div className="mt-8 border-t border-white/10 pt-8">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-[var(--foreground)]">
+                  {selectedXmlMonth ? `Registros de ${selectedXmlMonth}` : 'Todos os Registros (Últimos 1000)'}
+                </h3>
+                {selectedXmlMonth && (
+                  <button onClick={() => fetchXmlsForMonth(null)} className="text-sm text-[var(--gold)] hover:underline">
+                    Ver Todos
+                  </button>
+                )}
+              </div>
+              
+              <div className="overflow-x-auto rounded-xl border border-[var(--card-border)] bg-black/40">
+                <table className="min-w-full text-left whitespace-nowrap">
+                  <thead className="table-header bg-[var(--sidebar-bg)] border-b border-[var(--card-border)]">
+                    <tr>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Chave NF-e</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Série/Num</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Emissão</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Valor</th>
+                      <th className="px-6 py-4 text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Origem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {loadingXmls ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-[var(--foreground-muted)]">
+                          Carregando registros...
+                        </td>
+                      </tr>
+                    ) : xmlList.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-8 text-center text-[var(--foreground-muted)]">
+                          Nenhum registro encontrado.
+                        </td>
+                      </tr>
+                    ) : (
+                      xmlList.map((xml, idx) => (
+                        <tr key={idx} className="hover:bg-white/5 transition-colors">
+                          <td className="px-6 py-4">
+                            {xml.situacao === 'CANCELADA' ? (
+                              <span className="badge badge-missing">{xml.situacao}</span>
+                            ) : (
+                              <span className="badge badge-ok">{xml.situacao || 'AUTORIZADA'}</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-mono text-[var(--foreground)]">{xml.chave_nfe}</td>
+                          <td className="px-6 py-4 text-sm text-[var(--foreground)]">{xml.serie} / {xml.numero}</td>
+                          <td className="px-6 py-4 text-sm text-[var(--foreground)]">{xml.data_emissao}</td>
+                          <td className="px-6 py-4 text-sm font-semibold text-[var(--foreground)]">
+                            {xml.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-[var(--foreground-muted)]">{xml.origem || 'Upload'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
