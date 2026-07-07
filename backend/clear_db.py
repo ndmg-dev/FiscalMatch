@@ -11,8 +11,9 @@ def clear():
         db.query(DocumentoXML).delete()
         db.query(DocumentoSped).delete()
         db.query(ArquivoSped).delete()
+        db.query(Empresa).delete()
         db.commit()
-        print("✅ Banco limpo com sucesso! (A sua Empresa cadastrada foi mantida para facilitar)")
+        print("✅ Banco limpo com sucesso! (Absolutamente tudo foi apagado, incluindo as empresas)")
     except Exception as e:
         db.rollback()
         print(f"❌ Erro ao limpar o banco: {e}")
