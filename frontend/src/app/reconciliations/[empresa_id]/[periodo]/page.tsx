@@ -86,6 +86,8 @@ export default function ReconciliationReportPage() {
     'OK': stats.ok,
     'FALTANTE': stats.faltante,
     'DIVERGENTE': stats.divergente,
+    'IGNORADA_POR_REGRA': stats.ignorada || 0,
+    'NAO_ATRIBUIDA': stats.nao_atribuida || 0,
     'Total Registros': stats.total
   } : report.reduce((acc, curr) => {
     acc[curr.status] = (acc[curr.status] || 0) + 1

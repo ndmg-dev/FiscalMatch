@@ -42,6 +42,8 @@ def get_historico(empresa_id: str, db: Session = Depends(get_db)):
             "ok": statuses.get("OK", 0),
             "faltante": statuses.get("FALTANTE", 0),
             "divergente": statuses.get("DIVERGENTE", 0),
+            "ignorada": statuses.get("IGNORADA_POR_REGRA", 0),
+            "nao_atribuida": statuses.get("NAO_ATRIBUIDA", 0),
             "last_run": r.last_run.isoformat() if r.last_run else None,
         })
         
