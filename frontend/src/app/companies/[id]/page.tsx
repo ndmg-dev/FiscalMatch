@@ -252,10 +252,10 @@ export default function CompanyDetailsPage() {
 
        {activeTab === 'conciliacao' && (
         <>
-          <div className="glass-card rounded-2xl p-8 gold-accent relative">
+          <div className="glass-card rounded-2xl p-8 gold-accent relative z-20">
             {/* Loading overlay effect */}
             {isProcessing && (
-              <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-8">
+              <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-30 flex flex-col items-center justify-center p-8">
                  <div className="bg-[var(--background-card)] border border-[var(--gold-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
                    <h3 className="text-xl font-bold text-[var(--gold)] mb-6 flex items-center gap-2">
                      <Zap size={24} className="animate-pulse" /> Processando Conciliação
@@ -298,13 +298,13 @@ export default function CompanyDetailsPage() {
                       value={periodo}
                       onChange={e => setPeriodo(e.target.value)}
                       placeholder="Ex: 2026-05"
-                      className="input-field w-full pl-10 cursor-pointer"
+                      className="input-field w-full pl-12 cursor-pointer"
                       required
                       disabled={isProcessing}
                       onClick={() => setIsCalendarOpen(!isCalendarOpen)}
                       readOnly
                     />
-                    <Calendar size={18} className="absolute left-3 top-3 text-[var(--foreground-muted)]" />
+                    <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--foreground-muted)]" />
                     
                     {isCalendarOpen && (
                       <div className="absolute z-50 mt-2 p-4 bg-[#111111] border border-white/10 rounded-xl shadow-2xl w-64" data-testid="calendar-popup">
