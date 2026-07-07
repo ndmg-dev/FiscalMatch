@@ -420,7 +420,28 @@ export default function CompanyDetailsPage() {
       {/* Tab: Base de Dados (XMLs) */}
       {activeTab === 'base_dados' && (
         <div className="space-y-6">
-          <div className="glass-card rounded-2xl p-8">
+          <div className="glass-card rounded-2xl p-8 relative">
+            {isProcessing && processingState === 'uploading_xml' && (
+              <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-8">
+                 <div className="bg-[var(--background-card)] border border-[var(--gold-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                   <h3 className="text-xl font-bold text-[var(--gold)] mb-6 flex items-center gap-2">
+                     <Code size={24} className="animate-pulse" /> Importando XMLs
+                   </h3>
+                   <div className="space-y-4">
+                     {logs.map((log, i) => (
+                       <div key={i} className="flex items-center gap-3">
+                         {log.status === 'loading' && <div className="w-5 h-5 rounded-full border-2 border-[var(--gold)] border-t-transparent animate-spin shrink-0"></div>}
+                         {log.status === 'done' && <div className="w-5 h-5 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0"><span className="text-black text-xs font-bold">✓</span></div>}
+                         {log.status === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0" />}
+                         <span className={`text-sm ${log.status === 'loading' ? 'text-[var(--foreground)] font-medium animate-pulse' : 'text-[var(--foreground-muted)]'}`}>
+                           {log.message}
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+              </div>
+            )}
             <h2 className="text-2xl font-bold text-[var(--foreground)] mb-6 flex items-center gap-2">
               <Code size={24} className="text-[var(--gold)]" /> Upload de XMLs (Lote)
             </h2>
@@ -510,7 +531,28 @@ export default function CompanyDetailsPage() {
       {/* Tab: Auditoria */}
       {activeTab === 'auditoria' && (
         <div className="space-y-6">
-          <div className="glass-card rounded-2xl p-8">
+          <div className="glass-card rounded-2xl p-8 relative">
+            {isProcessing && processingState === 'uploading_sped' && (
+              <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-8">
+                 <div className="bg-[var(--background-card)] border border-[var(--gold-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                   <h3 className="text-xl font-bold text-[var(--gold)] mb-6 flex items-center gap-2">
+                     <AlertCircle size={24} className="animate-pulse" /> Gerando Relatório
+                   </h3>
+                   <div className="space-y-4">
+                     {logs.map((log, i) => (
+                       <div key={i} className="flex items-center gap-3">
+                         {log.status === 'loading' && <div className="w-5 h-5 rounded-full border-2 border-[var(--gold)] border-t-transparent animate-spin shrink-0"></div>}
+                         {log.status === 'done' && <div className="w-5 h-5 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0"><span className="text-black text-xs font-bold">✓</span></div>}
+                         {log.status === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0" />}
+                         <span className={`text-sm ${log.status === 'loading' ? 'text-[var(--foreground)] font-medium animate-pulse' : 'text-[var(--foreground-muted)]'}`}>
+                           {log.message}
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+              </div>
+            )}
             <h2 className="text-2xl font-bold text-[var(--foreground)] mb-2 flex items-center gap-2">
               <AlertCircle size={24} className="text-[var(--gold)]" /> Relatório Reverso de Auditoria
             </h2>
