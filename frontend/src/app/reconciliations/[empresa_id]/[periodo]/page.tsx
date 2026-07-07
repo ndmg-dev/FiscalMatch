@@ -165,9 +165,11 @@ export default function ReconciliationReportPage() {
               className={`min-w-[200px] p-5 rounded-2xl flex-shrink-0 snap-start border cursor-pointer transition-all shadow-lg backdrop-blur-md ${statusFilter === status ? 'border-[var(--gold)] bg-[var(--gold-glow)] shadow-[0_0_15px_rgba(201,168,76,0.3)]' : 'bg-black/60 border-[var(--card-border)] hover:border-[var(--gold-border)] hover:bg-[var(--card-bg)] hover:-translate-y-1'}`}
             >
               <h3 className="text-[var(--foreground-muted)] text-sm font-medium mb-3">{status.replace(/_/g, ' ')}</h3>
-              <div className="flex items-end justify-between">
-                <span className="text-3xl font-bold text-[var(--gold)]">{String(count)}</span>
-                <span className={`badge ${statusBadge[status] || 'badge-ignored'}`}>{status}</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-3xl font-bold text-[var(--gold)] truncate" title={String(count)}>
+                  {Number(count).toLocaleString('pt-BR')}
+                </span>
+                <span className={`badge whitespace-nowrap ${statusBadge[status] || 'badge-ignored'}`}>{status}</span>
               </div>
             </div>
           ))}
