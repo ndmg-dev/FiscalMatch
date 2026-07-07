@@ -35,8 +35,8 @@ class XMLParser:
         data_emissao = None
         if dhEmi:
             try:
-                # remove timezone info for simplicity in MVP
-                dhEmi_clean = dhEmi.split('-')[0] if len(dhEmi.split('-')) == 4 else dhEmi[:19]
+                # remove timezone info for simplicity in MVP by just taking the first 19 chars (YYYY-MM-DDTHH:MM:SS)
+                dhEmi_clean = dhEmi[:19]
                 data_emissao = datetime.strptime(dhEmi_clean, "%Y-%m-%dT%H:%M:%S")
             except ValueError:
                 pass
