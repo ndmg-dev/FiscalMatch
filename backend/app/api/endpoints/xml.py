@@ -51,6 +51,8 @@ def upload_xml(
             try:
                 with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
                     for zip_info in z.infolist():
+                        if '__MACOSX' in zip_info.filename or zip_info.filename.split('/')[-1].startswith('.'):
+                            continue
                         if zip_info.filename.lower().endswith('.xml'):
                             xml_bytes = z.read(zip_info.filename)
                             try:

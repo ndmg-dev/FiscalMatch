@@ -500,15 +500,37 @@ export default function CompanyDetailsPage() {
                     });
                     if (!xmlRes.ok) throw new Error('Erro ao fazer upload dos XMLs');
                     const xmlResData = await xmlRes.json();
-                    const totalXmls = xmlResData.results ? xmlResData.results.length : xmlFilesMain.length;
-                    setLogs([{ message: `${totalXmls} arquivos XML processados com sucesso.`, status: 'done' }]);
+                    
+                    if (xmlResData.results) {
+                      const successCount = xmlResData.results.filter((r: any) => r.status === 'success').length;
+                      const errorCount = xmlResData.results.filter((r: any) => r.status === 'error').length;
+                      const errors = xmlResData.results.filter((r: any) => r.status === 'error');
+                      
+                      setLogs([{ 
+                        message: `${successCount} XMLs importados. ${errorCount > 0 ? `${errorCount} falharam.` : ''}`, 
+                        status: errorCount > 0 && successCount === 0 ? 'error' : 'done' 
+                      }]);
+
+                      if (errorCount > 0) {
+                        console.error("Erros na importação:", errors);
+                        setMessage(`${errorCount} arquivo(s) ignorado(s). Motivo comum: Não é uma NF-e modelo 55/65, é arquivo de cancelamento, ou está corrompido. Ex: ${errors[0].filename} - ${errors[0].message}`);
+                        setMessageType('error');
+                      } else {
+                        setMessage('');
+                      }
+                    } else {
+                      setLogs([{ message: 'Upload concluído, mas formato de resposta inesperado.', status: 'done' }]);
+                    }
                     
                     // Refresh summary
                     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
                       .then(res => res.json())
-                      .then(data => setXmlSummary(data));
+                      .then(data => {
+                        setXmlSummary(data);
+                        fetchXmlsForMonth(null);
+                      });
                       
-                    setTimeout(() => setProcessingState('idle'), 1500);
+                    setTimeout(() => setProcessingState('idle'), 4000);
                   } catch(e: any) {
                     setLogs([{ message: e.message, status: 'error' }]);
                     setMessageType('error');
