@@ -10,6 +10,9 @@ export default function CompanyDetailsPage() {
   const router = useRouter()
   const [company, setCompany] = useState<any>(null)
   const [history, setHistory] = useState<any[]>([])
+  
+  // Tabs: 'conciliacao' | 'base_dados' | 'auditoria'
+  const [activeTab, setActiveTab] = useState<'conciliacao' | 'base_dados' | 'auditoria'>('conciliacao')
 
   // Automation Form states
   const [periodo, setPeriodo] = useState('')
@@ -22,6 +25,14 @@ export default function CompanyDetailsPage() {
   const [logs, setLogs] = useState<{message: string, status: 'loading' | 'done' | 'error'}[]>([])
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState<'info' | 'error'>('info')
+  
+  // Base de Dados states
+  const [xmlSummary, setXmlSummary] = useState<any[]>([])
+  
+  // Auditoria states
+  const [auditPeriod, setAuditPeriod] = useState('')
+  const [auditReport, setAuditReport] = useState<any>(null)
+
   // Calendar states
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -85,6 +96,11 @@ export default function CompanyDetailsPage() {
         }
       })
       .catch(err => console.error("Erro ao buscar histórico:", err))
+      
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
+      .then(res => res.json())
+      .then(data => setXmlSummary(data))
+      .catch(err => console.error("Erro ao buscar resumo XML:", err))
   }, [id])
 
   async function handleAutomatedFlow(e: React.FormEvent) {
@@ -109,28 +125,6 @@ export default function CompanyDetailsPage() {
       setLogs(prev => [
         { message: 'Arquivo SPED processado com sucesso.', status: 'done' },
       ])
-
-      if (xmlFilesMain && xmlFilesMain.length > 0) {
-        setLogs(prev => [...prev, { message: 'Enviando arquivos XML em lote...', status: 'loading' }])
-        setProcessingState('uploading_xml')
-        const formDataXml = new FormData()
-        for (let i = 0; i < xmlFilesMain.length; i++) {
-          formDataXml.append('files', xmlFilesMain[i])
-        }
-        const xmlRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/upload`, {
-          method: 'POST',
-          body: formDataXml,
-        })
-        if (!xmlRes.ok) throw new Error('Erro ao fazer upload dos XMLs')
-        
-        const xmlResData = await xmlRes.json()
-        const totalXmls = xmlResData.results ? xmlResData.results.length : xmlFilesMain.length
-        
-        setLogs(prev => [
-          ...prev.slice(0, -1),
-          { message: `${totalXmls} arquivos XML processados com sucesso.`, status: 'done' },
-        ])
-      }
 
       setProcessingState('syncing_sieg_and_reconciling')
       setLogs(prev => [...prev, { message: syncSieg ? 'Consultando notas na SIEG e conciliando dados...' : 'Iniciando conciliação de dados...', status: 'loading' }])
@@ -174,6 +168,30 @@ export default function CompanyDetailsPage() {
   }
 
 
+  async function handleAudit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!auditPeriod) return
+    
+    setMessageType('info')
+    setLogs([{ message: 'Gerando relatório de auditoria...', status: 'loading' }])
+    setProcessingState('uploading_sped')
+    
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/auditoria/xml?mes=${auditPeriod}`)
+      if (!res.ok) throw new Error('Erro ao gerar auditoria')
+      const data = await res.json()
+      setAuditReport(data)
+      
+      setLogs([{ message: 'Auditoria concluída com sucesso.', status: 'done' }])
+      setTimeout(() => setProcessingState('idle'), 1000)
+    } catch (err: any) {
+      setLogs([{ message: err.message, status: 'error' }])
+      setMessageType('error')
+      setMessage(err.message)
+      setProcessingState('idle')
+    }
+  }
+
   if (!company) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -210,199 +228,379 @@ export default function CompanyDetailsPage() {
         </div>
       )}
 
-      {/* Primary Action: Automated Flow */}
-      <div className="glass-card rounded-2xl p-8 gold-accent relative">
-        {/* Loading overlay effect */}
-        {isProcessing && (
-          <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-8">
-             <div className="bg-[var(--background-card)] border border-[var(--gold-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
-               <h3 className="text-xl font-bold text-[var(--gold)] mb-6 flex items-center gap-2">
-                 <Zap size={24} className="animate-pulse" /> Processando Conciliação
-               </h3>
-               <div className="space-y-4">
-                 {logs.map((log, i) => (
-                   <div key={i} className="flex items-center gap-3">
-                     {log.status === 'loading' && <div className="w-5 h-5 rounded-full border-2 border-[var(--gold)] border-t-transparent animate-spin shrink-0"></div>}
-                     {log.status === 'done' && <div className="w-5 h-5 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0"><span className="text-black text-xs font-bold">✓</span></div>}
-                     {log.status === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0" />}
-                     <span className={`text-sm ${log.status === 'loading' ? 'text-[var(--foreground)] font-medium animate-pulse' : 'text-[var(--foreground-muted)]'}`}>
-                       {log.message}
-                     </span>
-                   </div>
-                 ))}
-               </div>
-             </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-white/10 pb-2">
+        <button
+          onClick={() => setActiveTab('conciliacao')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'conciliacao' ? 'bg-[var(--gold)] text-black' : 'text-[var(--foreground-muted)] hover:bg-white/5'}`}
+        >
+          Conciliação SPED
+        </button>
+        <button
+          onClick={() => setActiveTab('base_dados')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'base_dados' ? 'bg-[var(--gold)] text-black' : 'text-[var(--foreground-muted)] hover:bg-white/5'}`}
+        >
+          Base de XMLs
+        </button>
+        <button
+          onClick={() => setActiveTab('auditoria')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'auditoria' ? 'bg-[var(--gold)] text-black' : 'text-[var(--foreground-muted)] hover:bg-white/5'}`}
+        >
+          Auditoria (Relatório Reverso)
+        </button>
+      </div>
 
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-[var(--gold-glow)] border border-[var(--gold-border)] flex items-center justify-center">
-            <Zap size={22} className="text-[var(--gold)]" />
+       {activeTab === 'conciliacao' && (
+        <>
+          <div className="glass-card rounded-2xl p-8 gold-accent relative">
+            {/* Loading overlay effect */}
+            {isProcessing && (
+              <div className="absolute inset-0 rounded-2xl bg-black/80 backdrop-blur-md z-10 flex flex-col items-center justify-center p-8">
+                 <div className="bg-[var(--background-card)] border border-[var(--gold-border)] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                   <h3 className="text-xl font-bold text-[var(--gold)] mb-6 flex items-center gap-2">
+                     <Zap size={24} className="animate-pulse" /> Processando Conciliação
+                   </h3>
+                   <div className="space-y-4">
+                     {logs.map((log, i) => (
+                       <div key={i} className="flex items-center gap-3">
+                         {log.status === 'loading' && <div className="w-5 h-5 rounded-full border-2 border-[var(--gold)] border-t-transparent animate-spin shrink-0"></div>}
+                         {log.status === 'done' && <div className="w-5 h-5 rounded-full bg-[var(--gold)] flex items-center justify-center shrink-0"><span className="text-black text-xs font-bold">✓</span></div>}
+                         {log.status === 'error' && <AlertCircle size={20} className="text-red-400 shrink-0" />}
+                         <span className={`text-sm ${log.status === 'loading' ? 'text-[var(--foreground)] font-medium animate-pulse' : 'text-[var(--foreground-muted)]'}`}>
+                           {log.message}
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 rounded-xl bg-[var(--gold-glow)] border border-[var(--gold-border)] flex items-center justify-center">
+                <Zap size={22} className="text-[var(--gold)]" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-[var(--foreground)]">Conciliação Automática</h2>
+                <p className="text-[var(--foreground-muted)] mt-1">
+                  Envie o SPED e o sistema fará a busca no SIEG automaticamente.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAutomatedFlow} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">Período (YYYY-MM)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={periodo}
+                      onChange={e => setPeriodo(e.target.value)}
+                      placeholder="Ex: 2026-05"
+                      className="input-field w-full pl-10 cursor-pointer"
+                      required
+                      disabled={isProcessing}
+                      onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+                      readOnly
+                    />
+                    <Calendar size={18} className="absolute left-3 top-3 text-[var(--foreground-muted)]" />
+                    
+                    {isCalendarOpen && (
+                      <div className="absolute z-50 mt-2 p-4 bg-[#111111] border border-white/10 rounded-xl shadow-2xl w-64" data-testid="calendar-popup">
+                        <div className="flex justify-between items-center mb-4">
+                          <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))} className="p-1 text-[var(--foreground-muted)] hover:text-white" data-testid="prev-month-btn"><ChevronLeft size={16} /></button>
+                          <span className="font-bold text-sm">{currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}</span>
+                          <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))} className="p-1 text-[var(--foreground-muted)] hover:text-white" data-testid="next-month-btn"><ChevronRight size={16} /></button>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 mb-2 text-center text-xs font-medium text-[var(--foreground-muted)]">
+                          <div>D</div><div>S</div><div>T</div><div>Q</div><div>Q</div><div>S</div><div>S</div>
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 place-items-center">
+                          {renderCalendarDays()}
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-white/10 text-right">
+                          <button type="button" onClick={() => setIsCalendarOpen(false)} className="text-xs text-[var(--foreground-muted)] hover:text-white" data-testid="close-calendar-btn">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">
+                    Arquivo SPED (.txt)
+                  </label>
+                  <input
+                    type="file"
+                    accept=".txt"
+                    onChange={e => setSpedFile(e.target.files?.[0] || null)}
+                    className="file-input"
+                    required
+                    disabled={isProcessing}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex flex-col justify-center mb-6">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncSieg}
+                    onChange={e => setSyncSieg(e.target.checked)}
+                    className="w-5 h-5 rounded border-white/20 bg-black/50 text-[var(--gold)] focus:ring-[var(--gold)] focus:ring-offset-0"
+                    disabled={isProcessing}
+                  />
+                  <span className="text-sm font-medium text-[var(--foreground)]">
+                    Consultar API da SIEG Automaticamente
+                  </span>
+                </label>
+                <p className="text-xs text-[var(--foreground-muted)] mt-1 ml-8">
+                  Desmarque se a API estiver fora do ar ou se você já importou os XMLs na aba "Base de XMLs".
+                </p>
+              </div>
+
+              <button 
+                disabled={isProcessing || !spedFile || !periodo} 
+                className="btn-gold w-full py-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2"
+              >
+                <Zap size={20} />
+                {isProcessing ? 'Processando...' : (syncSieg ? 'Processar e Conciliar com SIEG' : 'Processar Arquivos Localmente')}
+              </button>
+            </form>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--foreground)]">Conciliação Automática</h2>
-            <p className="text-[var(--foreground-muted)] mt-1">
-              Envie o SPED e o sistema fará a busca no SIEG automaticamente.
-            </p>
+
+          {/* Histórico de Conciliações */}
+          <div className="mt-12">
+            <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2 mb-6">
+              <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
+            </h2>
+            {history.length === 0 ? (
+              <div className="glass-card rounded-xl p-8 text-center text-[var(--foreground-muted)]">
+                Nenhuma conciliação processada para esta empresa ainda.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {history.map((h, idx) => (
+                  <div key={idx} className="glass-card rounded-xl p-6 relative group border border-white/5 hover:border-[var(--gold-border)] transition-all flex flex-col">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="text-2xl font-bold text-[var(--foreground)]">{h.periodo}</div>
+                      <Link href={`/reconciliations/${id}/${h.periodo}`} className="text-xs font-bold text-[var(--gold)] bg-[var(--gold-glow)] px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                        Ver Relatório
+                      </Link>
+                    </div>
+                    <div className="space-y-2 text-sm flex-grow">
+                      <div className="flex justify-between">
+                        <span className="text-[var(--foreground-muted)]">Total Registros</span>
+                        <span className="text-[var(--foreground)] font-medium">{Number(h.total).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--foreground-muted)]">Conciliados (OK)</span>
+                        <span className="text-green-400 font-medium">{Number(h.ok).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-[var(--foreground-muted)]">Pendências</span>
+                        <span className="text-red-400 font-medium">{Number((h.divergente || 0) + (h.faltante || 0)).toLocaleString('pt-BR')}</span>
+                      </div>
+                    </div>
+                    {h.last_run && (
+                      <div className="mt-4 pt-4 border-t border-white/10 text-xs text-[var(--foreground-muted)]">
+                        Última execução: {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleDateString('pt-BR')} às {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Tab: Base de Dados (XMLs) */}
+      {activeTab === 'base_dados' && (
+        <div className="space-y-6">
+          <div className="glass-card rounded-2xl p-8">
+            <h2 className="text-2xl font-bold text-[var(--foreground)] mb-6 flex items-center gap-2">
+              <Code size={24} className="text-[var(--gold)]" /> Upload de XMLs (Lote)
+            </h2>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">Arquivos XML ou ZIP</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".xml,.zip"
+                    onChange={(e) => setXmlFilesMain(e.target.files)}
+                    className="input-field w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[var(--gold)] file:text-black hover:file:bg-[var(--gold-glow)]"
+                  />
+                </div>
+                <p className="text-xs text-[var(--foreground-muted)] mt-2">Você pode importar os XMLs separadamente aqui. Eles ficarão salvos na base global da empresa.</p>
+              </div>
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (!xmlFilesMain || xmlFilesMain.length === 0) return;
+                  setMessageType('info');
+                  setLogs([{ message: 'Enviando arquivos XML em lote...', status: 'loading' }]);
+                  setProcessingState('uploading_xml');
+                  const formDataXml = new FormData();
+                  for (let i = 0; i < xmlFilesMain.length; i++) {
+                    formDataXml.append('files', xmlFilesMain[i]);
+                  }
+                  try {
+                    const xmlRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/upload`, {
+                      method: 'POST',
+                      body: formDataXml,
+                    });
+                    if (!xmlRes.ok) throw new Error('Erro ao fazer upload dos XMLs');
+                    const xmlResData = await xmlRes.json();
+                    const totalXmls = xmlResData.results ? xmlResData.results.length : xmlFilesMain.length;
+                    setLogs([{ message: `${totalXmls} arquivos XML processados com sucesso.`, status: 'done' }]);
+                    
+                    // Refresh summary
+                    fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
+                      .then(res => res.json())
+                      .then(data => setXmlSummary(data));
+                      
+                    setTimeout(() => setProcessingState('idle'), 1500);
+                  } catch(e: any) {
+                    setLogs([{ message: e.message, status: 'error' }]);
+                    setMessageType('error');
+                    setMessage(e.message);
+                    setProcessingState('idle');
+                  }
+                }}
+                disabled={!xmlFilesMain || isProcessing}
+                className="btn-gold w-full py-3 rounded-xl font-bold text-black"
+              >
+                Importar XMLs para a Base
+              </button>
+            </div>
+          </div>
+
+          <div className="glass-card rounded-2xl p-8">
+            <h2 className="text-2xl font-bold text-[var(--foreground)] mb-6">Volume de XMLs na Base</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {xmlSummary.map((sum, i) => (
+                <div key={i} className="bg-white/5 rounded-xl p-5 border border-white/10">
+                  <div className="text-[var(--gold)] font-bold text-lg mb-2">{sum.mes}</div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-[var(--foreground-muted)]">Quantidade:</span>
+                    <span className="font-semibold text-white">{sum.quantidade} XMLs</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm mt-1">
+                    <span className="text-[var(--foreground-muted)]">Total:</span>
+                    <span className="font-semibold text-white">
+                      {sum.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {xmlSummary.length === 0 && (
+                <div className="col-span-full text-center py-8 text-[var(--foreground-muted)]">Nenhum XML na base de dados.</div>
+              )}
+            </div>
           </div>
         </div>
+      )}
+      {/* End of Base de Dados Tab */}
 
-        <form onSubmit={handleAutomatedFlow} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">
-                <Calendar size={13} className="inline mr-1 mb-0.5" />
-                Período (YYYY-MM)
-              </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsCalendarOpen(true)}
-                  className="input-field w-full text-left flex items-center justify-between"
-                  disabled={isProcessing}
-                  data-testid="open-calendar-btn"
-                >
-                  <span className={periodo ? 'text-[var(--foreground)]' : 'text-[var(--foreground-muted)]'}>
-                    {periodo ? periodo : 'Selecione uma data (YYYY-MM)'}
-                  </span>
-                  <Calendar size={16} className="text-[var(--foreground-muted)]" />
-                </button>
-                {isCalendarOpen && (
-                  <div className="absolute z-50 mt-2 p-4 bg-[#1e1e1e] border border-[var(--gold-border)] rounded-2xl shadow-xl w-[300px]" data-testid="calendar-modal">
-                    <div className="flex justify-between items-center mb-4">
-                      <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-1 hover:bg-white/5 rounded">
-                        <ChevronLeft size={20} className="text-[var(--foreground-muted)]" />
-                      </button>
-                      <div className="font-semibold text-[var(--foreground)]">
-                        {currentMonth.toLocaleString('pt-BR', { month: 'long', year: 'numeric' })}
-                      </div>
-                      <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-1 hover:bg-white/5 rounded">
-                        <ChevronRight size={20} className="text-[var(--foreground-muted)]" />
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                      {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
-                        <div key={d} className="text-xs text-[var(--foreground-muted)] font-medium">{d}</div>
-                      ))}
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 place-items-center">
-                      {renderCalendarDays()}
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-white/10 text-right">
-                      <button type="button" onClick={() => setIsCalendarOpen(false)} className="text-xs text-[var(--foreground-muted)] hover:text-white" data-testid="close-calendar-btn">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">
-                Arquivo SPED (.txt)
-              </label>
-              <input
-                type="file"
-                accept=".txt"
-                onChange={e => setSpedFile(e.target.files?.[0] || null)}
-                className="file-input"
-                required
-                disabled={isProcessing}
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">
-                <Code size={13} className="inline mr-1 mb-0.5" />
-                Arquivos XML Opcionais (Em lote)
-              </label>
-              <input
-                type="file"
-                accept=".xml,.zip"
-                multiple
-                onChange={e => setXmlFilesMain(e.target.files)}
-                className="file-input w-full"
-                disabled={isProcessing}
-              />
-              <p className="text-xs text-[var(--foreground-muted)] mt-1">
-                Selecione as notas para cruzar manualmente junto com o SPED.
-              </p>
-            </div>
-            <div className="flex flex-col justify-center">
-              <label className="flex items-center gap-3 cursor-pointer mt-6">
+      {/* Tab: Auditoria */}
+      {activeTab === 'auditoria' && (
+        <div className="space-y-6">
+          <div className="glass-card rounded-2xl p-8">
+            <h2 className="text-2xl font-bold text-[var(--foreground)] mb-2 flex items-center gap-2">
+              <AlertCircle size={24} className="text-[var(--gold)]" /> Relatório Reverso de Auditoria
+            </h2>
+            <p className="text-sm text-[var(--foreground-muted)] mb-6">
+              Descubra em quais meses os XMLs emitidos em um determinado período foram escriturados no SPED.
+            </p>
+            <form onSubmit={handleAudit} className="flex items-end gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-[var(--foreground-muted)] mb-2">Mês de Emissão (YYYY-MM)</label>
                 <input
-                  type="checkbox"
-                  checked={syncSieg}
-                  onChange={e => setSyncSieg(e.target.checked)}
-                  className="w-5 h-5 rounded border-white/20 bg-black/50 text-[var(--gold)] focus:ring-[var(--gold)] focus:ring-offset-0"
-                  disabled={isProcessing}
+                  type="text"
+                  placeholder="Ex: 2026-01"
+                  value={auditPeriod}
+                  onChange={(e) => setAuditPeriod(e.target.value)}
+                  className="input-field w-full"
                 />
-                <span className="text-sm font-medium text-[var(--foreground)]">
-                  Consultar API da SIEG Automaticamente
-                </span>
-              </label>
-              <p className="text-xs text-[var(--foreground-muted)] mt-1 ml-8">
-                Desmarque se a API estiver fora do ar ou se você já subiu todos os XMLs necessários.
-              </p>
-            </div>
-          </div>
-
-          <button 
-            disabled={isProcessing || !spedFile || !periodo} 
-            className="btn-gold w-full py-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2"
-          >
-            <Zap size={20} />
-            {isProcessing ? 'Processando...' : (syncSieg ? 'Processar e Conciliar com SIEG' : 'Processar Arquivos Localmente')}
-          </button>
-        </form>
-      </div>
-
-      {/* Histórico de Conciliações */}
-      <div className="mt-12">
-        <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2 mb-6">
-          <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
-        </h2>
-        {history.length === 0 ? (
-          <div className="glass-card rounded-xl p-8 text-center text-[var(--foreground-muted)]">
-            Nenhuma conciliação processada para esta empresa ainda.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {history.map((h, idx) => (
-              <div key={idx} className="glass-card rounded-xl p-6 relative group border border-white/5 hover:border-[var(--gold-border)] transition-all flex flex-col">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="text-2xl font-bold text-[var(--foreground)]">{h.periodo}</div>
-                  <Link href={`/reconciliations/${id}/${h.periodo}`} className="text-xs font-bold text-[var(--gold)] bg-[var(--gold-glow)] px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    Ver Relatório
-                  </Link>
-                </div>
-                <div className="space-y-2 text-sm flex-grow">
-                  <div className="flex justify-between">
-                    <span className="text-[var(--foreground-muted)]">Total Registros</span>
-                    <span className="text-[var(--foreground)] font-medium">{Number(h.total).toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--foreground-muted)]">Conciliados (OK)</span>
-                    <span className="text-green-400 font-medium">{Number(h.ok).toLocaleString('pt-BR')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[var(--foreground-muted)]">Pendências</span>
-                    <span className="text-red-400 font-medium">{Number((h.divergente || 0) + (h.faltante || 0)).toLocaleString('pt-BR')}</span>
-                  </div>
-                </div>
-                {h.last_run && (
-                  <div className="mt-4 pt-4 border-t border-white/10 text-xs text-[var(--foreground-muted)]">
-                    Última execução: {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleDateString('pt-BR')} às {new Date(h.last_run + (h.last_run.endsWith('Z') ? '' : 'Z')).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
-                  </div>
-                )}
               </div>
-            ))}
+              <button type="submit" disabled={isProcessing || !auditPeriod} className="btn-gold px-8 py-3 rounded-xl font-bold text-black">
+                Gerar Relatório
+              </button>
+            </form>
           </div>
-        )}
-      </div>
 
+          {auditReport && (
+            <div className="glass-card rounded-2xl p-8">
+              <div className="flex flex-col sm:flex-row gap-4 justify-between mb-8">
+                <div className="bg-white/5 p-4 rounded-xl text-center flex-1 border border-white/10">
+                  <div className="text-[var(--foreground-muted)] text-sm mb-1">Total Emitidas</div>
+                  <div className="text-2xl font-bold text-white">{auditReport.total_xmls}</div>
+                </div>
+                <div className="bg-green-500/10 p-4 rounded-xl text-center flex-1 border border-green-500/20">
+                  <div className="text-green-400 text-sm mb-1">Foram Escrituradas</div>
+                  <div className="text-2xl font-bold text-green-400">{auditReport.total_escriturados}</div>
+                </div>
+                <div className="bg-red-500/10 p-4 rounded-xl text-center flex-1 border border-red-500/20">
+                  <div className="text-red-400 text-sm mb-1">Não Escrituradas</div>
+                  <div className="text-2xl font-bold text-red-400">{auditReport.total_nao_escriturados}</div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-white/10">
+                      <th className="p-4 text-xs font-semibold text-[var(--foreground-muted)] tracking-wider">CHAVE NF-E</th>
+                      <th className="p-4 text-xs font-semibold text-[var(--foreground-muted)] tracking-wider">DATA EMISSÃO</th>
+                      <th className="p-4 text-xs font-semibold text-[var(--foreground-muted)] tracking-wider text-right">VALOR</th>
+                      <th className="p-4 text-xs font-semibold text-[var(--foreground-muted)] tracking-wider">STATUS SEFAZ</th>
+                      <th className="p-4 text-xs font-semibold text-[var(--foreground-muted)] tracking-wider">SPED</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {auditReport.detalhes.map((item: any) => (
+                      <tr key={item.id} className="hover:bg-white/5 transition-colors">
+                        <td className="p-4 text-sm font-medium">{item.chave_nfe}</td>
+                        <td className="p-4 text-sm text-[var(--foreground-muted)]">{item.data_emissao}</td>
+                        <td className="p-4 text-sm text-right">{item.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                        <td className="p-4 text-sm">
+                          <span className={`px-2 py-1 rounded text-xs ${item.situacao_sefaz === 'CANCELADA' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                            {item.situacao_sefaz}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm">
+                          {item.escriturado ? (
+                            <div className="flex gap-1 flex-wrap">
+                              {item.speds_encontrados.map((s: any, idx: number) => (
+                                <span key={idx} className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs">
+                                  {s.periodo} ({s.status})
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs">Não encontrada</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {auditReport.detalhes.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-[var(--foreground-muted)]">Nenhum XML encontrado para este mês.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {/* End of Auditoria Tab */}
     </div>
   )
 }

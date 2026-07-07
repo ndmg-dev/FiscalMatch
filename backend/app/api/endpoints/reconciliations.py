@@ -172,3 +172,61 @@ def export_csv(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
     csv_str = ExporterService.export_csv(data)
     headers = {'Content-Disposition': f'attachment; filename="conciliacao_{periodo}.csv"'}
     return Response(csv_str, headers=headers, media_type='text/csv')
+
+@router.get("/{empresa_id}/auditoria/xml")
+def auditoria_xml(empresa_id: str, mes: str, db: Session = Depends(get_db)):
+    """
+    Relatório Reverso: Busca todos os XMLs de um determinado mês e verifica
+    em quais períodos do SPED eles foram efetivamente escriturados.
+    """
+    from sqlalchemy import func
+    from app.models.xml import DocumentoXML
+    
+    # Busca todos os XMLs emitidos no mês
+    xmls = db.query(DocumentoXML).filter(
+        DocumentoXML.empresa_id == empresa_id,
+        func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == mes
+    ).all()
+    
+    # Para cada XML, vamos ver se ele tem alguma conciliação com documento_sped_id não nulo
+    xml_ids = [xml.id for xml in xmls]
+    
+    conciliacoes = db.query(Conciliacao).filter(
+        Conciliacao.documento_fiscal_id.in_(xml_ids),
+        Conciliacao.documento_sped_id.isnot(None)
+    ).all()
+    
+    # Agrupa períodos escriturados por XML
+    escriturados_map = {}
+    for c in conciliacoes:
+        if c.documento_fiscal_id not in escriturados_map:
+            escriturados_map[c.documento_fiscal_id] = []
+        if c.periodo not in escriturados_map[c.documento_fiscal_id]:
+            escriturados_map[c.documento_fiscal_id].append({
+                "periodo": c.periodo,
+                "status": c.status
+            })
+            
+    report = []
+    for xml in xmls:
+        speds_encontrados = escriturados_map.get(xml.id, [])
+        
+        report.append({
+            "id": str(xml.id),
+            "chave_nfe": xml.chave_nfe,
+            "numero": xml.numero,
+            "serie": xml.serie,
+            "data_emissao": xml.data_emissao.strftime("%d/%m/%Y %H:%M") if xml.data_emissao else None,
+            "valor": float(xml.valor_total) if xml.valor_total else 0.0,
+            "situacao_sefaz": xml.situacao,
+            "escriturado": len(speds_encontrados) > 0,
+            "speds_encontrados": speds_encontrados
+        })
+        
+    return {
+        "mes": mes,
+        "total_xmls": len(xmls),
+        "total_escriturados": sum(1 for r in report if r["escriturado"]),
+        "total_nao_escriturados": sum(1 for r in report if not r["escriturado"]),
+        "detalhes": report
+    }

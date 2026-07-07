@@ -157,3 +157,33 @@ def upload_xml(
         "message": f"{len(results)} XMLs processados com sucesso.",
         "results": results
     }
+
+@router.get("/summary")
+def get_xml_summary(empresa_id: str, db: Session = Depends(get_db)):
+    """
+    Returns a summary of XMLs imported for the given company, grouped by month/year.
+    """
+    from sqlalchemy import func
+    from app.models.xml import DocumentoXML
+    
+    # Use to_char for postgres to group by YYYY-MM
+    query = db.query(
+        func.to_char(DocumentoXML.data_emissao, 'YYYY-MM').label('mes'),
+        func.count(DocumentoXML.id).label('quantidade'),
+        func.sum(DocumentoXML.valor_total).label('valor_total')
+    ).filter(
+        DocumentoXML.empresa_id == empresa_id,
+        DocumentoXML.data_emissao.isnot(None)
+    ).group_by(
+        func.to_char(DocumentoXML.data_emissao, 'YYYY-MM')
+    ).order_by(
+        func.to_char(DocumentoXML.data_emissao, 'YYYY-MM').desc()
+    ).all()
+    
+    return [
+        {
+            "mes": row.mes,
+            "quantidade": row.quantidade,
+            "valor_total": float(row.valor_total) if row.valor_total else 0.0
+        } for row in query
+    ]
