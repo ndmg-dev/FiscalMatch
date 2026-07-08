@@ -41,7 +41,16 @@ def delete_empresa(empresa_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
     
     try:
-        # DB cascade will handle all child records (XML, SPED, Conciliacao, Logs)
+        from app.models.reconciliation import Conciliacao
+        from app.models.sped import DocumentoSped, ArquivoSped
+        from app.models.xml import DocumentoXML
+        
+        # Manually delete child records first to prevent Postgres cascading SET NULL deadlocks/slowdowns
+        db.query(Conciliacao).filter(Conciliacao.empresa_id == empresa.id).delete(synchronize_session=False)
+        db.query(DocumentoSped).filter(DocumentoSped.empresa_id == empresa.id).delete(synchronize_session=False)
+        db.query(ArquivoSped).filter(ArquivoSped.empresa_id == empresa.id).delete(synchronize_session=False)
+        db.query(DocumentoXML).filter(DocumentoXML.empresa_id == empresa.id).delete(synchronize_session=False)
+        
         db.delete(empresa)
         db.commit()
     except Exception as e:

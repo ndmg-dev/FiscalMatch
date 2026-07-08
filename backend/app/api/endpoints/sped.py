@@ -41,11 +41,20 @@ def upload_sped(
     threading.Thread(target=upload_bg, daemon=True).start()
 
     try:
+        from app.models.reconciliation import Conciliacao
+        
         # Remove old SPED files and their parsed documents for the same empresa+periodo
         old_arquivos = db.query(ArquivoSped).filter(
             ArquivoSped.empresa_id == empresa.id,
             ArquivoSped.periodo == periodo
         ).all()
+        
+        # Prevent Postgres slow O(N) cascade SET NULL on conciliacoes
+        db.query(Conciliacao).filter(
+            Conciliacao.empresa_id == empresa.id,
+            Conciliacao.periodo == periodo
+        ).delete(synchronize_session=False)
+        
         for old in old_arquivos:
             db.query(DocumentoSped).filter(DocumentoSped.arquivo_sped_id == old.id).delete(synchronize_session=False)
             db.delete(old)
