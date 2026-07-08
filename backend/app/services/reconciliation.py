@@ -67,6 +67,12 @@ class ReconciliationService:
 
             if xml.modelo not in ('55', '65'):
                 continue
+                
+            # Ignora notas de saída (Emissão Própria) para não poluir o relatório.
+            # Usamos essa checagem em vez de checar o destinatário estritamente para 
+            # permitir testes com empresas de CNPJ fictício.
+            if xml.cnpj_emitente == empresa.cnpj:
+                continue
 
             # Find match O(1) in SPED
             matched_sped = None
@@ -80,9 +86,7 @@ class ReconciliationService:
                     matched_sped = sped_by_composite[comp_key]
             
             if not matched_sped:
-                # Usuário solicitou que o relatório acuse SOMENTE o que foi encontrado no SPED,
-                # para que não fiquem "milhares de itens faltosos acusados na interface" (XMLs de saída/lixo)
-                continue
+                results.append(self._build_result("FALTANTE", None, xml, "XML não encontrado no SPED"))
             else:
                 diffs = self._compare(matched_sped, xml)
                 if diffs:

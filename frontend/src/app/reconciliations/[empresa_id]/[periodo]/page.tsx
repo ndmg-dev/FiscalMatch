@@ -158,7 +158,7 @@ export default function ReconciliationReportPage() {
           >
             <option value="ALL">Todos os Status</option>
             {uniqueStatuses.map(s => (
-              <option key={s} value={s}>{s === 'FALTANTE' ? 'Faltante no SPED' : s.replace(/_/g, ' ')}</option>
+              <option key={s} value={s}>{s === 'FALTANTE' ? 'Não encontrado no SPED' : s.replace(/_/g, ' ')}</option>
             ))}
           </select>
         </div>
@@ -173,12 +173,12 @@ export default function ReconciliationReportPage() {
               onClick={() => setStatusFilter(statusFilter === status ? 'ALL' : status)}
               className={`min-w-[200px] p-5 rounded-2xl flex-shrink-0 snap-start border cursor-pointer transition-all shadow-lg backdrop-blur-md ${statusFilter === status ? 'border-[var(--gold)] bg-[var(--gold-glow)] shadow-[0_0_15px_rgba(201,168,76,0.3)]' : 'bg-black/60 border-[var(--card-border)] hover:border-[var(--gold-border)] hover:bg-[var(--card-bg)] hover:-translate-y-1'}`}
             >
-              <h3 className="text-[var(--foreground-muted)] text-sm font-medium mb-3">{status === 'FALTANTE' ? 'Faltante no SPED' : status.replace(/_/g, ' ')}</h3>
+              <h3 className="text-[var(--foreground-muted)] text-sm font-medium mb-3">{status === 'FALTANTE' ? 'Não encontrado no SPED' : status.replace(/_/g, ' ')}</h3>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-3xl font-bold text-[var(--gold)] truncate" title={String(count)}>
                   {Number(count).toLocaleString('pt-BR')}
                 </span>
-                <span className={`badge whitespace-nowrap ${statusBadge[status] || 'badge-ignored'}`}>{status === 'FALTANTE' ? 'Faltante no SPED' : status}</span>
+                <span className={`badge whitespace-nowrap ${statusBadge[status] || 'badge-ignored'}`}>{status === 'FALTANTE' ? 'Não encontrado no SPED' : status}</span>
               </div>
             </div>
           ))}
@@ -224,7 +224,7 @@ export default function ReconciliationReportPage() {
                       <div className="flex items-center gap-2">
                         {expandedRows.has(row.id) ? <ChevronDown size={14} className="text-[var(--gold)]" /> : <ChevronRight size={14} className="text-[var(--foreground-muted)]" />}
                         <span className={`badge ${statusBadge[row.status] || 'badge-ignored'}`}>
-                          {row.status === 'FALTANTE' ? 'Faltante no SPED' : row.status}
+                          {row.status === 'FALTANTE' ? 'Não encontrado no SPED' : row.status}
                         </span>
                       </div>
                     </td>
