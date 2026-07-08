@@ -50,9 +50,10 @@ def delete_empresa(empresa_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Erro ao excluir registros do banco de dados")
         
     try:
-        # Async/Background deletion of files would be better, but sync is fine for MVP
-        storage.delete_company_files(empresa_id)
+        # Deletar arquivos do MinIO em background para não travar a resposta da API
+        import threading
+        threading.Thread(target=storage.delete_company_files, args=(empresa_id,), daemon=True).start()
     except Exception as e:
-        logger.warning(f"Failed to delete some MinIO files for company {empresa_id}: {e}")
+        logger.warning(f"Failed to start MinIO deletion thread for company {empresa_id}: {e}")
         
     return {"message": "Empresa e todos os dados associados foram excluídos com sucesso"}

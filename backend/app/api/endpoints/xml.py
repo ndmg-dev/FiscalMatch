@@ -14,12 +14,16 @@ router = APIRouter()
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB
 
 def upload_files_to_storage_bg(files_to_upload: list):
-    """Background task to upload files to storage"""
-    for storage_path, content in files_to_upload:
-        try:
-            storage.upload_file(storage_path, content)
-        except Exception as e:
-            logger.error(f"Erro no upload em background do arquivo {storage_path}: {e}")
+    """Background task to upload files to storage via daemon thread to prevent FastAPI thread pool exhaustion"""
+    import threading
+    def target():
+        for storage_path, content in files_to_upload:
+            try:
+                storage.upload_file(storage_path, content)
+            except Exception as e:
+                logger.error(f"Erro no upload em background do arquivo {storage_path}: {e}")
+                
+    threading.Thread(target=target, daemon=True).start()
 
 @router.post("/upload")
 def upload_xml(
@@ -164,9 +168,9 @@ def upload_xml(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao salvar no banco de dados: {str(e)}")
 
-    # 5. Agendar o upload para o MinIO em background
+    # 5. Agendar o upload para o MinIO em background (agora via thread independente)
     if files_to_upload_bg:
-        background_tasks.add_task(upload_files_to_storage_bg, files_to_upload_bg)
+        upload_files_to_storage_bg(files_to_upload_bg)
 
     return {
         "message": f"{len(results)} XMLs processados com sucesso.",
