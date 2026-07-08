@@ -2,34 +2,46 @@ import traceback
 import xml.etree.ElementTree as etree
 from datetime import datetime
 from typing import Dict, Any
+import re
 
 class XMLParser:
-    NAMESPACES = {'ns': 'http://www.portalfiscal.inf.br/nfe'}
-
     @classmethod
     def parse(cls, file_content: bytes) -> Dict[str, Any]:
         try:
             root = etree.fromstring(file_content)
         except etree.ParseError:
-            raise ValueError("Invalid XML content")
+            try:
+                # Fallback: attempt to decode as ISO-8859-1, fix XML declaration, and re-parse
+                text = file_content.decode('iso-8859-1')
+                text = re.sub(r'encoding="[^"]+"', 'encoding="UTF-8"', text)
+                root = etree.fromstring(text.encode('utf-8'))
+            except Exception:
+                raise ValueError("Invalid XML content")
 
-        infNFe = root.find('.//ns:infNFe', cls.NAMESPACES)
+        # Strip all namespaces from tags for robust searching
+        for elem in root.iter():
+            if '}' in elem.tag:
+                elem.tag = elem.tag.split('}', 1)[1]
+
+        infNFe = root.find('.//infNFe')
         if infNFe is None:
-            raise ValueError("Not an NF-e model 55 XML (missing infNFe)")
+            raise ValueError("Not an NF-e model 55/65 XML (missing infNFe tag)")
 
         chave_nfe = infNFe.get('Id', '').replace('NFe', '')
-        
-        ide = infNFe.find('ns:ide', cls.NAMESPACES)
+        if not chave_nfe:
+            raise ValueError("Missing Id attribute in infNFe")
+            
+        ide = infNFe.find('ide')
         if ide is None:
             raise ValueError("Missing ide node")
             
-        modelo = ide.findtext('ns:mod', namespaces=cls.NAMESPACES)
+        modelo = ide.findtext('mod')
         if modelo not in ('55', '65'):
             raise ValueError(f"Unsupported model: {modelo}")
 
-        serie = ide.findtext('ns:serie', namespaces=cls.NAMESPACES)
-        numero = ide.findtext('ns:nNF', namespaces=cls.NAMESPACES)
-        dhEmi = ide.findtext('ns:dhEmi', namespaces=cls.NAMESPACES)
+        serie = ide.findtext('serie')
+        numero = ide.findtext('nNF')
+        dhEmi = ide.findtext('dhEmi')
         
         # parse datetime, example format: 2023-01-01T10:00:00-03:00
         data_emissao = None
@@ -41,24 +53,24 @@ class XMLParser:
             except ValueError:
                 pass
 
-        emit = infNFe.find('ns:emit', cls.NAMESPACES)
-        cnpj_emitente = emit.findtext('ns:CNPJ', namespaces=cls.NAMESPACES) if emit is not None else None
+        emit = infNFe.find('emit')
+        cnpj_emitente = emit.findtext('CNPJ') if emit is not None else None
 
-        dest = infNFe.find('ns:dest', cls.NAMESPACES)
-        cnpj_destinatario = dest.findtext('ns:CNPJ', namespaces=cls.NAMESPACES) if dest is not None else None
+        dest = infNFe.find('dest')
+        cnpj_destinatario = dest.findtext('CNPJ') if dest is not None else None
 
-        total = infNFe.find('.//ns:total/ns:ICMSTot', cls.NAMESPACES)
+        total = infNFe.find('.//total/ICMSTot')
         valor_total = None
         if total is not None:
-            vNF = total.findtext('ns:vNF', namespaces=cls.NAMESPACES)
+            vNF = total.findtext('vNF')
             if vNF:
                 valor_total = float(vNF)
 
         # check situation from protNFe if exists
         situacao = "AUTORIZADA"
-        prot = root.find('.//ns:protNFe/ns:infProt', cls.NAMESPACES)
+        prot = root.find('.//protNFe/infProt')
         if prot is not None:
-            cStat = prot.findtext('ns:cStat', namespaces=cls.NAMESPACES)
+            cStat = prot.findtext('cStat')
             if cStat == '101':
                 situacao = "CANCELADA"
             elif cStat != '100':
