@@ -101,13 +101,20 @@ def upload_xml(
             "results": results
         }
 
-    # 2. Buscar no banco de dados quais chaves já existem (Batch Query)
+    # 2. Buscar no banco de dados quais chaves já existem (Batch Query - em chunks)
     chaves = [item["parsed"]["chave_nfe"] for item in parsed_xmls if "chave_nfe" in item["parsed"]]
-    existing_docs = db.query(DocumentoXML).filter(DocumentoXML.empresa_id == empresa_id, DocumentoXML.chave_nfe.in_(chaves)).all()
+    existing_docs = []
+    chunk_size = 1000
+    for i in range(0, len(chaves), chunk_size):
+        chunk = chaves[i:i + chunk_size]
+        docs_chunk = db.query(DocumentoXML).filter(DocumentoXML.empresa_id == empresa_id, DocumentoXML.chave_nfe.in_(chunk)).all()
+        existing_docs.extend(docs_chunk)
+        
     existing_map = {doc.chave_nfe: doc for doc in existing_docs}
 
     # 3. Processar inserções e atualizações em memória
     new_docs = []
+    docs_to_update = []
     
     for item in parsed_xmls:
         parsed = item["parsed"]
@@ -121,8 +128,10 @@ def upload_xml(
                 setattr(doc, k, v)
             doc.origem = "UPLOAD"
             doc.storage_path = storage_path
+            docs_to_update.append(doc)
         else:
             new_doc = DocumentoXML(
+                id=uuid.uuid4(),
                 empresa_id=empresa_id,
                 origem="UPLOAD",
                 storage_path=storage_path,
@@ -143,11 +152,13 @@ def upload_xml(
             "message": "Processado com sucesso"
         })
 
-    # 4. Salvar no banco em lote
+    # 4. Salvar no banco em lote de forma otimizada
     if new_docs:
-        db.add_all(new_docs)
+        # bulk_save_objects é muito mais rápido que add_all, pois pula o tracking do ORM
+        db.bulk_save_objects(new_docs)
     
     try:
+        # O commit agora vai salvar os updates e os inserts massivos rapidamente
         db.commit()
     except Exception as e:
         db.rollback()
