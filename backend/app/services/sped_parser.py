@@ -96,7 +96,7 @@ class SpedParser:
             "modelo": modelo,
             "cod_sit": cod_sit,
             "serie": serie,
-            "numero": int(numero) if numero.isdigit() else 0,
+            "numero": int(numero) if numero and numero.isdigit() else None,
             "chave_nfe": chave_nfe if chave_nfe else None,
             "data_doc": parse_date(dt_doc_str),
             "data_entrada_saida": parse_date(dt_e_s_str),

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, Numeric, text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, Numeric, text, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -6,6 +6,10 @@ from app.core.database import Base
 
 class DocumentoXML(Base):
     __tablename__ = "documentos_xml"
+    __table_args__ = (
+        UniqueConstraint('empresa_id', 'chave_nfe', name='uq_xml_empresa_chave'),
+        Index('ix_xml_data_emissao', 'data_emissao'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     empresa_id = Column(UUID(as_uuid=True), ForeignKey("empresas.id", ondelete="CASCADE"), nullable=False, index=True)

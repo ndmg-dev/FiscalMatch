@@ -21,8 +21,14 @@ export default function ReconciliationReportPage() {
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000&status=${statusFilter}`).then(res => res.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/historico`).then(res => res.json())
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000&status=${statusFilter}`).then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      }),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/historico`).then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      })
     ]).then(([reportData, historyData]) => {
       setReport(reportData)
       if (Array.isArray(historyData)) {
@@ -30,6 +36,9 @@ export default function ReconciliationReportPage() {
         if (periodStats) setStats(periodStats)
       }
       setLoading(false)
+    }).catch(err => {
+      console.error(err);
+      setLoading(false);
     })
   }, [empresa_id, periodo, statusFilter])
 

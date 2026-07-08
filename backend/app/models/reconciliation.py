@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, text
+from sqlalchemy import Column, String, DateTime, ForeignKey, text, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from datetime import datetime
 import uuid
@@ -6,6 +6,9 @@ from app.core.database import Base
 
 class Conciliacao(Base):
     __tablename__ = "conciliacoes"
+    __table_args__ = (
+        Index('ix_conciliacoes_empresa_periodo', 'empresa_id', 'periodo'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     empresa_id = Column(UUID(as_uuid=True), ForeignKey("empresas.id", ondelete="CASCADE"), nullable=False, index=True)

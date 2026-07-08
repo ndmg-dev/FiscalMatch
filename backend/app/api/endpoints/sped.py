@@ -7,6 +7,7 @@ from app.models.company import Empresa
 from app.services.sped_parser import SpedParser
 import uuid
 import logging
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -23,42 +24,41 @@ def upload_sped(
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    file_size = file.size
+    # Read file into memory for size calculation and dual-use (storage + parsing)
+    file_bytes = file.file.read()
+    file_size = len(file_bytes)
     
     # Upload to storage for archival using stream
     storage_path = f"sped/{empresa_id}/{periodo}/{uuid.uuid4()}_{file.filename}"
     try:
-        storage.upload_stream(storage_path, file.file, length=file_size)
+        storage.upload_stream(storage_path, io.BytesIO(file_bytes), length=file_size)
     except Exception as e:
         logger.warning(f"MinIO upload failed (non-critical): {e}")
 
-    # Remove old SPED files and their parsed documents for the same empresa+periodo
-    old_arquivos = db.query(ArquivoSped).filter(
-        ArquivoSped.empresa_id == empresa.id,
-        ArquivoSped.periodo == periodo
-    ).all()
-    for old in old_arquivos:
-        db.query(DocumentoSped).filter(DocumentoSped.arquivo_sped_id == old.id).delete(synchronize_session=False)
-        db.delete(old)
-    if old_arquivos:
-        db.commit()
-
-    arquivo_sped = ArquivoSped(
-        empresa_id=empresa.id,
-        periodo=periodo,
-        original_filename=file.filename,
-        storage_path=storage_path,
-        status="PARSING"
-    )
-    db.add(arquivo_sped)
-    db.commit()
-    db.refresh(arquivo_sped)
-
-    # Parse SPED directly from stream
     try:
-        file.file.seek(0)
+        # Remove old SPED files and their parsed documents for the same empresa+periodo
+        old_arquivos = db.query(ArquivoSped).filter(
+            ArquivoSped.empresa_id == empresa.id,
+            ArquivoSped.periodo == periodo
+        ).all()
+        for old in old_arquivos:
+            db.query(DocumentoSped).filter(DocumentoSped.arquivo_sped_id == old.id).delete(synchronize_session=False)
+            db.delete(old)
+
+        arquivo_sped = ArquivoSped(
+            empresa_id=empresa.id,
+            periodo=periodo,
+            original_filename=file.filename,
+            storage_path=storage_path,
+            status="PARSING"
+        )
+        db.add(arquivo_sped)
+        db.flush()
+
+        # Parse SPED from in-memory bytes
+        content_lines = file_bytes.decode('windows-1252', errors='replace').splitlines()
         parser = SpedParser()
-        docs_generator = parser.parse_stream(file.file)
+        docs_generator = parser.parse_stream(content_lines)
 
         docs_chunk = []
         docs_inserted = 0
@@ -92,9 +92,10 @@ def upload_sped(
             "registros_c100": docs_inserted
         }
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
-        arquivo_sped.status = "ERROR"
-        db.commit()
+        db.rollback()
         logger.error(f"Erro ao processar SPED: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao processar arquivo SPED: {str(e)}")
-

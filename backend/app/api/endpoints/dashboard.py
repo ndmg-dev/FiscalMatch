@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from app.core.database import get_db
 from app.models.company import Empresa
 from app.models.xml import DocumentoXML
@@ -34,26 +34,25 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     actionable = ok_count + faltante_count + divergente_count + nao_atribuida_count
     compliance_rate = round((ok_count / actionable) * 100, 1) if actionable > 0 else 0
 
-    from sqlalchemy import case
     # Attention ranking: get all groupings and sort by worst compliance
     attention_raw = (
         db.query(
             Conciliacao.empresa_id,
             Conciliacao.periodo,
+            Empresa.razao_social,
             func.count(Conciliacao.id).label("total"),
             func.sum(case((Conciliacao.status == 'OK', 1), else_=0)).label("ok"),
             func.sum(case((Conciliacao.status == 'FALTANTE', 1), else_=0)).label("faltante"),
             func.sum(case((Conciliacao.status == 'DIVERGENTE', 1), else_=0)).label("divergente"),
             func.max(Conciliacao.created_at).label("last_run"),
         )
-        .group_by(Conciliacao.empresa_id, Conciliacao.periodo)
+        .join(Empresa, Conciliacao.empresa_id == Empresa.id)
+        .group_by(Conciliacao.empresa_id, Conciliacao.periodo, Empresa.razao_social)
         .all()
     )
 
     attention_list = []
     for r in attention_raw:
-        empresa = db.query(Empresa).filter(Empresa.id == r.empresa_id).first()
-        
         ok = int(r.ok) if r.ok else 0
         faltante = int(r.faltante) if r.faltante else 0
         divergente = int(r.divergente) if r.divergente else 0
@@ -68,7 +67,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         if (faltante + divergente) > 0:
             attention_list.append({
                 "empresa_id": str(r.empresa_id),
-                "empresa_nome": empresa.razao_social if empresa else "Desconhecida",
+                "empresa_nome": r.razao_social,
                 "periodo": r.periodo,
                 "total": r.total,
                 "ok": ok,
@@ -83,18 +82,26 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     attention_list.sort(key=lambda x: x["penalty_score"], reverse=True)
     recent = attention_list[:10]
 
-    # Empresas list with counts
-    empresas = db.query(Empresa).all()
+    # Empresas list with counts — single query using subqueries
+    xml_subq = db.query(DocumentoXML.empresa_id, func.count(DocumentoXML.id).label('xml_count')).group_by(DocumentoXML.empresa_id).subquery()
+    sped_subq = db.query(DocumentoSped.empresa_id, func.count(DocumentoSped.id).label('sped_count')).group_by(DocumentoSped.empresa_id).subquery()
+
+    empresas_with_counts = db.query(
+        Empresa.id, Empresa.razao_social, Empresa.cnpj,
+        func.coalesce(xml_subq.c.xml_count, 0).label('xml_count'),
+        func.coalesce(sped_subq.c.sped_count, 0).label('sped_count')
+    ).outerjoin(xml_subq, Empresa.id == xml_subq.c.empresa_id
+    ).outerjoin(sped_subq, Empresa.id == sped_subq.c.empresa_id
+    ).all()
+
     empresas_list = []
-    for e in empresas:
-        xml_count = db.query(func.count(DocumentoXML.id)).filter(DocumentoXML.empresa_id == e.id).scalar() or 0
-        sped_count = db.query(func.count(DocumentoSped.id)).filter(DocumentoSped.empresa_id == e.id).scalar() or 0
+    for e in empresas_with_counts:
         empresas_list.append({
             "id": str(e.id),
             "razao_social": e.razao_social,
             "cnpj": e.cnpj,
-            "xml_count": xml_count,
-            "sped_count": sped_count,
+            "xml_count": e.xml_count,
+            "sped_count": e.sped_count,
         })
 
     return {

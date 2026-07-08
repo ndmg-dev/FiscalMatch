@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Briefcase, GitMerge, Upload, Settings } from 'react-feather'
+import { Home, Briefcase, Upload, Settings } from 'react-feather'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: Home },

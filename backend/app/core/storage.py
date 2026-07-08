@@ -5,19 +5,25 @@ import io
 
 class StorageService:
     def __init__(self):
-        self.client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ROOT_USER,
-            secret_key=settings.MINIO_ROOT_PASSWORD,
-            secure=settings.MINIO_SECURE
-        )
+        self._client = None
         self.bucket_name = settings.MINIO_BUCKET
-        self._ensure_bucket()
+
+    @property
+    def client(self):
+        if self._client is None:
+            self._client = Minio(
+                settings.MINIO_ENDPOINT,
+                access_key=settings.MINIO_ROOT_USER,
+                secret_key=settings.MINIO_ROOT_PASSWORD,
+                secure=settings.MINIO_SECURE
+            )
+            self._ensure_bucket()
+        return self._client
 
     def _ensure_bucket(self):
         try:
-            if not self.client.bucket_exists(self.bucket_name):
-                self.client.make_bucket(self.bucket_name)
+            if not self._client.bucket_exists(self.bucket_name):
+                self._client.make_bucket(self.bucket_name)
         except S3Error as e:
             print(f"Error checking/creating bucket: {e}")
 
@@ -43,9 +49,10 @@ class StorageService:
 
     def get_file(self, object_name: str) -> bytes:
         response = self.client.get_object(self.bucket_name, object_name)
-        data = response.read()
-        response.close()
-        response.release_conn()
-        return data
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
 
 storage = StorageService()

@@ -2,7 +2,11 @@ from typing import List, Dict, Any
 from app.models.sped import DocumentoSped
 from app.models.xml import DocumentoXML
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ReconciliationService:
     def __init__(self, db: Session, empresa_id: str, periodo: str):
@@ -11,6 +15,8 @@ class ReconciliationService:
         self.periodo = periodo
 
     def run(self) -> List[Dict[str, Any]]:
+        logger.info("Iniciando conciliação empresa_id=%s periodo=%s", self.empresa_id, self.periodo)
+
         from app.models.sped import ArquivoSped
         sped_docs = self.db.query(
             DocumentoSped.id, DocumentoSped.chave_nfe, DocumentoSped.modelo,
@@ -30,6 +36,7 @@ class ReconciliationService:
             DocumentoXML.situacao, DocumentoXML.valor_total, DocumentoXML.data_emissao
         ).filter(
             DocumentoXML.empresa_id == self.empresa_id,
+            func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == self.periodo,
         ).all()
 
         # O(1) hash maps for XMLs
@@ -66,18 +73,12 @@ class ReconciliationService:
                 serie_int = int(sped.serie) if sped.serie and sped.serie.isdigit() else sped.serie
                 if sped.ind_oper == '0': # Entrada, emitente é o terceiro
                     comp_key = (sped.modelo, serie_int, sped.numero, sped.cnpj_part)
+                    if comp_key in xml_by_composite:
+                        matched_xml = xml_by_composite[comp_key]
                 else: # Saída, emitente é a empresa
-                    comp_key = (sped.modelo, serie_int, sped.numero, None) # Ideally we need the company CNPJ here, but since xml_docs is already filtered by empresa_id, we can check if it exists with company CNPJ
-                    # We need the company CNPJ. Let's find it from the first XML if available, or pass it.
-                    # Actually, if ind_oper == 1, the emitente in XML is the company itself.
-                    # We can search the dict for any key that matches (modelo, serie, numero) where emitente is NOT a third party.
-                    # Let's simplify for O(1) by assuming the fallback must be exact.
-                    pass 
-                
-                if 'comp_key' in locals() and comp_key in xml_by_composite:
-                    matched_xml = xml_by_composite[comp_key]
-                elif sped.ind_oper == '1':
-                    # Find by scanning just once (rare fallback)
+                    # For saída, scan xml_by_composite for keys matching
+                    # (modelo, serie, numero) ignoring CNPJ since the emitter
+                    # is the company itself and we already filtered by empresa_id.
                     for k, v in xml_by_composite.items():
                         if k[0] == sped.modelo and k[1] == serie_int and k[2] == sped.numero:
                             matched_xml = v
@@ -102,6 +103,10 @@ class ReconciliationService:
                 else:
                     results.append(self._build_result("NAO_ATRIBUIDA", None, xml, "Sem registro correspondente no SPED"))
 
+        logger.info(
+            "Conciliação finalizada empresa_id=%s periodo=%s: %d resultados",
+            self.empresa_id, self.periodo, len(results)
+        )
         return results
 
     def _compare(self, sped: DocumentoSped, xml: DocumentoXML) -> Dict[str, Any]:

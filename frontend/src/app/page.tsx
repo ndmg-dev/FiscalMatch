@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Briefcase, FileText, Database, CheckCircle, AlertTriangle, XCircle, ArrowRight, Activity, TrendingUp, Clock } from 'react-feather'
+import { Briefcase, FileText, Database, AlertTriangle, XCircle, ArrowRight, Activity } from 'react-feather'
 
 interface DashboardData {
   total_empresas: number
@@ -42,9 +42,15 @@ export default function Home() {
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/stats`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      })
       .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      })
   }, [])
 
   const formatCNPJ = (cnpj: string) => {

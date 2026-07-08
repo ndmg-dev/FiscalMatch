@@ -6,6 +6,9 @@ from app.models.log import LogProcessamento
 from app.services.sped_parser import SpedParser
 from app.services.xml_parser import XMLParser
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 def process_sped_file(arquivo_sped_id: str):
     db = SessionLocal()
@@ -22,14 +25,14 @@ def process_sped_file(arquivo_sped_id: str):
         content = file_bytes.decode('windows-1252', errors='replace') # SPED is usually windows-1252 or utf-8
 
         parser = SpedParser()
-        result = parser.parse(content)
+        logger.info("Parsing SPED file %s (arquivo_sped_id=%s)", arquivo.storage_path, arquivo_sped_id)
 
         # Clear old docs for this file if reprocessing
         db.query(DocumentoSped).filter(DocumentoSped.arquivo_sped_id == arquivo.id).delete()
 
         # Insert new ones
         docs_to_insert = []
-        for doc in result["documents"]:
+        for doc in parser.parse_stream(content.splitlines()):
             docs_to_insert.append(DocumentoSped(
                 arquivo_sped_id=arquivo.id,
                 empresa_id=arquivo.empresa_id,
@@ -58,7 +61,7 @@ def process_xml_file(empresa_id: str, storage_path: str, origem: str):
         result = XMLParser.parse(file_bytes)
 
         # Upsert by chave_nfe
-        existing = db.query(DocumentoXML).filter(DocumentoXML.chave_nfe == result["chave_nfe"]).first()
+        existing = db.query(DocumentoXML).filter(DocumentoXML.chave_nfe == result["chave_nfe"], DocumentoXML.empresa_id == empresa_id).first()
         if existing:
             for k, v in result.items():
                 setattr(existing, k, v)

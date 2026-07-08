@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, Numeric, text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, Numeric, text, Index
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -6,6 +6,9 @@ from app.core.database import Base
 
 class ArquivoSped(Base):
     __tablename__ = "arquivos_sped"
+    __table_args__ = (
+        Index('ix_arquivos_sped_empresa_periodo', 'empresa_id', 'periodo'),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     empresa_id = Column(UUID(as_uuid=True), ForeignKey("empresas.id", ondelete="CASCADE"), nullable=False, index=True)

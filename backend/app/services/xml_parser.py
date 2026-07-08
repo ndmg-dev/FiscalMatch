@@ -60,9 +60,7 @@ class XMLParser:
             if not cnpj_emitente:
                 cnpj_emitente = emit.findtext('CPF')
                 
-        # If it's still missing, provide a fallback to avoid DB NOT NULL crash
-        if not cnpj_emitente:
-            cnpj_emitente = "00000000000000"
+
 
         dest = infNFe.find('dest')
         cnpj_destinatario = None
@@ -92,7 +90,7 @@ class XMLParser:
             "chave_nfe": chave_nfe,
             "modelo": modelo,
             "serie": serie,
-            "numero": int(numero) if numero else 0,
+            "numero": int(numero) if numero else None,
             "cnpj_emitente": cnpj_emitente,
             "cnpj_destinatario": cnpj_destinatario,
             "data_emissao": data_emissao,

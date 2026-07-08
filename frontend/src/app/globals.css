@@ -394,3 +394,16 @@ body::before {
   100% { transform: translate(0, 0) scale(1); }
 }
 
+/* Utility: hide scrollbar */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* CSS Variable fix */
+:root {
+  --background-card: rgba(30, 30, 60, 0.8);
+}

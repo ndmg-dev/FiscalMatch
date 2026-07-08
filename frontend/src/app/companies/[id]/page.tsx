@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, FileText, Code, Zap, Calendar, AlertCircle, ChevronLeft, ChevronRight, X } from 'react-feather'
+import { ArrowLeft, FileText, Code, Zap, Calendar, AlertCircle, ChevronLeft, ChevronRight } from 'react-feather'
 
 export default function CompanyDetailsPage() {
   const { id } = useParams()
@@ -40,6 +40,7 @@ export default function CompanyDetailsPage() {
         ? `${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/list?mes=${mes}`
         : `${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/list`
       const res = await fetch(url)
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json()
       setXmlList(data)
     } catch (err) {
@@ -105,11 +106,18 @@ export default function CompanyDetailsPage() {
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      })
       .then(data => setCompany(data))
+      .catch(err => console.error("Erro ao buscar empresa:", err))
       
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/historico`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setHistory(data)
@@ -118,7 +126,10 @@ export default function CompanyDetailsPage() {
       .catch(err => console.error("Erro ao buscar histórico:", err))
       
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Erro ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setXmlSummary(data)
         fetchXmlsForMonth(null) // Load all XMLs initially
@@ -531,11 +542,15 @@ export default function CompanyDetailsPage() {
                     
                     // Refresh summary
                     fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}/xml/summary`)
-                      .then(res => res.json())
+                      .then(res => {
+                        if (!res.ok) throw new Error(`Erro ${res.status}`);
+                        return res.json();
+                      })
                       .then(data => {
                         setXmlSummary(data);
                         fetchXmlsForMonth(null);
-                      });
+                      })
+                      .catch(err => console.error("Erro ao atualizar resumo XML:", err));
                       
                     setTimeout(() => setProcessingState('idle'), 4000);
                   } catch(e: any) {

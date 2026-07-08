@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -5,23 +6,26 @@ from app.core.database import Base, engine
 import app.models  # to ensure models are loaded
 from app.api.endpoints import companies, sped, xml, reconciliations, sieg, dashboard
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], # In MVP allow all, in prod define explicit origins
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-@app.on_event("startup")
-def on_startup():
-    Base.metadata.create_all(bind=engine)
 
 app.include_router(companies.router, prefix=f"{settings.API_V1_STR}/empresas", tags=["Empresas"])
 app.include_router(sped.router, prefix=f"{settings.API_V1_STR}/empresas/{{empresa_id}}/sped", tags=["SPED"])

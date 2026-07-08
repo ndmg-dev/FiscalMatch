@@ -3,16 +3,15 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.storage import storage
 from app.models.company import Empresa
-from redis import Redis
-from rq import Queue
-from app.core.config import settings
 import uuid
 from typing import List
-import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
-redis_conn = Redis.from_url(settings.REDIS_URL)
-q = Queue(connection=redis_conn)
+
+MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB
 
 def upload_files_to_storage_bg(files_to_upload: list):
     """Background task to upload files to storage"""
@@ -20,7 +19,7 @@ def upload_files_to_storage_bg(files_to_upload: list):
         try:
             storage.upload_file(storage_path, content)
         except Exception as e:
-            print(f"Erro no upload em background do arquivo {storage_path}: {e}")
+            logger.error(f"Erro no upload em background do arquivo {storage_path}: {e}")
 
 @router.post("/upload")
 def upload_xml(
@@ -46,6 +45,9 @@ def upload_xml(
     
     for file in files:
         file_bytes = file.file.read()
+
+        if len(file_bytes) > MAX_UPLOAD_SIZE:
+            raise HTTPException(status_code=413, detail="Arquivo excede o tamanho máximo de 500MB")
 
         if file.filename.lower().endswith('.zip'):
             try:

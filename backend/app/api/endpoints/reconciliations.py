@@ -1,51 +1,62 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.company import Empresa
 from app.models.reconciliation import Conciliacao
 from app.services.reconciliation import ReconciliationService
-from app.services.exporter import ExporterService
-import json
 
 router = APIRouter()
 
 @router.get("/{empresa_id}/historico")
 def get_historico(empresa_id: str, db: Session = Depends(get_db)):
-    from sqlalchemy import func
+    from sqlalchemy import func, case
     
-    # Query to group reconciliations by period for this company
-    recent_raw = (
+    # Single query that gets both totals and status breakdown
+    breakdown_raw = (
         db.query(
             Conciliacao.periodo,
-            func.count(Conciliacao.id).label("total"),
+            Conciliacao.status,
+            func.count(Conciliacao.id).label("cnt"),
             func.max(Conciliacao.created_at).label("last_run"),
         )
         .filter(Conciliacao.empresa_id == empresa_id)
-        .group_by(Conciliacao.periodo)
-        .order_by(func.max(Conciliacao.created_at).desc())
+        .group_by(Conciliacao.periodo, Conciliacao.status)
         .all()
     )
 
-    history = []
-    for r in recent_raw:
-        # Get status breakdown for this specific period
-        statuses = dict(
-            db.query(Conciliacao.status, func.count(Conciliacao.id))
-            .filter(Conciliacao.empresa_id == empresa_id, Conciliacao.periodo == r.periodo)
-            .group_by(Conciliacao.status)
-            .all()
-        )
-        history.append({
-            "periodo": r.periodo,
-            "total": r.total,
-            "ok": statuses.get("OK", 0),
-            "faltante": statuses.get("FALTANTE", 0),
-            "divergente": statuses.get("DIVERGENTE", 0),
-            "ignorada": statuses.get("IGNORADA_POR_REGRA", 0),
-            "nao_atribuida": statuses.get("NAO_ATRIBUIDA", 0),
-            "last_run": r.last_run.isoformat() if r.last_run else None,
-        })
+    # Merge in Python: group by periodo
+    period_map = {}
+    for row in breakdown_raw:
+        if row.periodo not in period_map:
+            period_map[row.periodo] = {
+                "periodo": row.periodo,
+                "total": 0,
+                "ok": 0,
+                "faltante": 0,
+                "divergente": 0,
+                "ignorada": 0,
+                "nao_atribuida": 0,
+                "last_run": None,
+            }
+        entry = period_map[row.periodo]
+        entry["total"] += row.cnt
+        status_key = {
+            "OK": "ok",
+            "FALTANTE": "faltante",
+            "DIVERGENTE": "divergente",
+            "IGNORADA_POR_REGRA": "ignorada",
+            "NAO_ATRIBUIDA": "nao_atribuida",
+        }.get(row.status)
+        if status_key:
+            entry[status_key] += row.cnt
+        if row.last_run and (entry["last_run"] is None or row.last_run > entry["last_run"]):
+            entry["last_run"] = row.last_run
+
+    # Sort by most recent and format
+    history = sorted(period_map.values(), key=lambda x: x["last_run"] or "", reverse=True)
+    for h in history:
+        h["last_run"] = h["last_run"].isoformat() if h["last_run"] else None
         
     return history
 
@@ -90,27 +101,30 @@ def run_reconciliation(empresa_id: str, periodo: str, sync_sieg: bool = False, d
                     print(f"Erro ao parsear XML do Sieg: {e}")
             db.commit()
 
-    # Clear previous reconciliations for the period
-    db.query(Conciliacao).filter(
-        Conciliacao.empresa_id == empresa_id,
-        Conciliacao.periodo == periodo
-    ).delete()
-    db.commit()
+    try:
+        # Clear previous reconciliations for the period
+        db.query(Conciliacao).filter(
+            Conciliacao.empresa_id == empresa_id,
+            Conciliacao.periodo == periodo
+        ).delete(synchronize_session=False)
 
-    # Run synchronously for MVP simplicity, or could be enqueued
-    svc = ReconciliationService(db, empresa_id, periodo)
-    results = svc.run()
+        # Run synchronously for MVP simplicity, or could be enqueued
+        svc = ReconciliationService(db, empresa_id, periodo)
+        results = svc.run()
 
-    docs_to_insert = []
-    for r in results:
-        docs_to_insert.append(Conciliacao(
-            empresa_id=empresa_id,
-            periodo=periodo,
-            **r
-        ))
-    if docs_to_insert:
-        db.bulk_save_objects(docs_to_insert)
-    db.commit()
+        docs_to_insert = []
+        for r in results:
+            docs_to_insert.append(Conciliacao(
+                empresa_id=empresa_id,
+                periodo=periodo,
+                **r
+            ))
+        if docs_to_insert:
+            db.bulk_save_objects(docs_to_insert)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro na conciliação: {str(e)}")
 
     warning = None
     if sync_sieg and 'sieg_result' in locals():
@@ -254,7 +268,6 @@ def get_relatorio_stream(empresa_id: str, periodo: str, db: Session):
 
 @router.get("/{empresa_id}/{periodo}/exportar.csv")
 def export_csv(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
-    from fastapi.responses import StreamingResponse
     import csv, io, json
     
     def iter_csv():
