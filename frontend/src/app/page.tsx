@@ -152,17 +152,17 @@ export default function Home() {
 
       {/* Two columns: Ranking de Atenção + Companies */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Ranking de Atenção */}
-        <div className="glass-card rounded-2xl p-6 border-red-500/20">
+        {/* Últimas Conciliações */}
+        <div className="glass-card rounded-2xl p-6">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="text-sm font-medium text-red-400 flex items-center gap-2">
-              <AlertTriangle size={16} />
-              Requer Atenção (Piores Índices)
+            <h3 className="text-sm font-medium text-[var(--foreground-muted)] flex items-center gap-2">
+              <Activity size={16} className="text-[var(--gold)]" />
+              Últimas Conciliações
             </h3>
           </div>
           {data.recent_reconciliations.length === 0 ? (
             <div className="text-center py-8 text-[var(--foreground-muted)] text-sm">
-              Nenhuma pendência encontrada.
+              Nenhuma conciliação realizada.
             </div>
           ) : (
             <div className="space-y-3">
@@ -170,32 +170,27 @@ export default function Home() {
                 <Link
                   key={i}
                   href={`/reconciliations/${r.empresa_id}/${r.periodo}`}
-                  className="block p-4 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/40 transition-all group"
+                  className="block p-4 rounded-xl border border-[var(--card-border)] hover:border-[var(--gold-border)] hover:bg-[var(--gold-glow)] transition-all group"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="text-sm font-bold text-red-100 group-hover:text-white transition-colors truncate max-w-[220px]">{r.empresa_nome}</p>
-                      <p className="text-xs text-red-300/70 mt-0.5">Período: {r.periodo}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-red-400">
-                        {((r as any).compliance_rate || 0).toFixed(1)}%
-                      </span>
-                      <p className="text-[10px] text-red-400/60 uppercase tracking-wide">Conformidade</p>
+                      <p className="text-sm font-bold text-[var(--foreground)] group-hover:text-[var(--gold)] transition-colors truncate max-w-[220px]">{r.empresa_nome}</p>
+                      <p className="text-xs text-[var(--foreground-muted)] mt-0.5">Período: {r.periodo}</p>
                     </div>
                   </div>
-                  <div className="w-full h-1.5 bg-red-950 rounded-full overflow-hidden mb-3">
-                    <div
-                      className="h-full bg-red-500 rounded-full"
-                      style={{ width: `${(r as any).compliance_rate || 0}%` }}
-                    />
-                  </div>
-                  <div className="flex gap-4 text-xs">
-                    <span className="flex items-center gap-1.5 text-red-400 font-medium">
-                      <XCircle size={14} /> {r.faltante.toLocaleString('pt-BR')} faltantes
+                  
+                  <div className="flex justify-between items-center text-xs text-[var(--foreground-muted)]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      {r.ok.toLocaleString('pt-BR')} OK
                     </span>
-                    <span className="flex items-center gap-1.5 text-amber-400 font-medium">
-                      <AlertTriangle size={14} /> {r.divergente.toLocaleString('pt-BR')} divergentes
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                      {r.faltante.toLocaleString('pt-BR')} Faltantes no SPED
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                      {r.divergente.toLocaleString('pt-BR')} Divergentes
                     </span>
                   </div>
                 </Link>
