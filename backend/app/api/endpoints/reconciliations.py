@@ -168,18 +168,139 @@ def get_relatorio(empresa_id: str, periodo: str, status: str = None, limit: int 
     return report
 
 @router.get("/{empresa_id}/{periodo}/exportar.xlsx")
-def export_excel(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
-    data = get_relatorio(empresa_id, periodo, limit=None, db=db)
-    file_bytes = ExporterService.export_excel(data)
-    headers = {'Content-Disposition': f'attachment; filename="conciliacao_{periodo}.xlsx"'}
-    return Response(file_bytes, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+def export_excel(empresa_id: str, periodo: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    from fastapi.responses import FileResponse
+    import openpyxl, tempfile, json, os
+    
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
+    tmp.close()
+    
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet("Conciliacao")
+    
+    headers = [
+        "Status da conciliação", "Chave da NF-e", "CNPJ emitente", "CNPJ destinatário",
+        "Nome do participante", "Modelo", "Série", "Número", "Data de emissão",
+        "Data de entrada/saída", "Valor no XML", "Valor no SPED", "Diferença",
+        "Situação da nota", "Origem do documento", "Observação do sistema"
+    ]
+    ws.append(headers)
+    
+    for row in get_relatorio_stream(empresa_id, periodo, db):
+        diferenca = row.get("diferenca")
+        if isinstance(diferenca, dict) or isinstance(diferenca, list):
+            diferenca = json.dumps(diferenca, ensure_ascii=False)
+            
+        ws.append([
+            row.get("status"), row.get("chave_nfe"), row.get("cnpj_emitente"), row.get("cnpj_destinatario"),
+            row.get("nome_participante"), row.get("modelo"), row.get("serie"), row.get("numero"),
+            row.get("data_emissao"), row.get("data_entrada_saida"), row.get("valor_xml"),
+            row.get("valor_sped"), diferenca, row.get("situacao_nota"),
+            row.get("origem_documento"), row.get("observacao")
+        ])
+        
+    wb.save(tmp.name)
+    background_tasks.add_task(os.remove, tmp.name)
+    
+    return FileResponse(
+        path=tmp.name, 
+        filename=f"conciliacao_{periodo}.xlsx", 
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+def get_relatorio_stream(empresa_id: str, periodo: str, db: Session):
+    from app.models.xml import DocumentoXML
+    from app.models.sped import DocumentoSped
+    
+    query = db.query(
+        Conciliacao.id, Conciliacao.status, Conciliacao.diferencas_json, Conciliacao.observacao,
+        DocumentoXML.chave_nfe.label("xml_chave_nfe"), DocumentoXML.cnpj_emitente.label("xml_cnpj_emitente"),
+        DocumentoXML.cnpj_destinatario.label("xml_cnpj_destinatario"), DocumentoXML.modelo.label("xml_modelo"),
+        DocumentoXML.serie.label("xml_serie"), DocumentoXML.numero.label("xml_numero"),
+        DocumentoXML.data_emissao.label("xml_data_emissao"), DocumentoXML.valor_total.label("xml_valor_total"),
+        DocumentoXML.situacao.label("xml_situacao"), DocumentoXML.origem.label("xml_origem"),
+        DocumentoSped.chave_nfe.label("sped_chave_nfe"), DocumentoSped.cnpj_part.label("sped_cnpj_part"),
+        DocumentoSped.nome_part.label("sped_nome_part"), DocumentoSped.modelo.label("sped_modelo"),
+        DocumentoSped.serie.label("sped_serie"), DocumentoSped.numero.label("sped_numero"),
+        DocumentoSped.data_doc.label("sped_data_doc"), DocumentoSped.data_entrada_saida.label("sped_data_es"),
+        DocumentoSped.valor_doc.label("sped_valor_doc"), DocumentoSped.cod_sit.label("sped_cod_sit")
+    )\
+        .outerjoin(DocumentoXML, Conciliacao.documento_fiscal_id == DocumentoXML.id)\
+        .outerjoin(DocumentoSped, Conciliacao.documento_sped_id == DocumentoSped.id)\
+        .filter(
+            Conciliacao.empresa_id == empresa_id,
+            Conciliacao.periodo == periodo
+        )
+        
+    for row in query.yield_per(2000):
+        yield {
+            "status": row.status,
+            "chave_nfe": row.xml_chave_nfe or row.sped_chave_nfe,
+            "cnpj_emitente": row.xml_cnpj_emitente or row.sped_cnpj_part,
+            "cnpj_destinatario": row.xml_cnpj_destinatario,
+            "nome_participante": row.sped_nome_part,
+            "modelo": row.xml_modelo or row.sped_modelo,
+            "serie": row.xml_serie or row.sped_serie,
+            "numero": row.xml_numero or row.sped_numero,
+            "data_emissao": row.xml_data_emissao.strftime("%d/%m/%Y") if row.xml_data_emissao else (row.sped_data_doc.strftime("%d/%m/%Y") if row.sped_data_doc else None),
+            "data_entrada_saida": row.sped_data_es.strftime("%d/%m/%Y") if row.sped_data_es else None,
+            "valor_xml": float(row.xml_valor_total) if row.xml_valor_total else None,
+            "valor_sped": float(row.sped_valor_doc) if row.sped_valor_doc else None,
+            "diferenca": row.diferencas_json,
+            "situacao_nota": row.xml_situacao or row.sped_cod_sit,
+            "origem_documento": row.xml_origem,
+            "observacao": row.observacao
+        }
 
 @router.get("/{empresa_id}/{periodo}/exportar.csv")
 def export_csv(empresa_id: str, periodo: str, db: Session = Depends(get_db)):
-    data = get_relatorio(empresa_id, periodo, limit=None, db=db)
-    csv_str = ExporterService.export_csv(data)
+    from fastapi.responses import StreamingResponse
+    import csv, io, json
+    
+    def iter_csv():
+        output = io.StringIO()
+        headers = [
+            "Status da conciliação", "Chave da NF-e", "CNPJ emitente", "CNPJ destinatário",
+            "Nome do participante", "Modelo", "Série", "Número", "Data de emissão",
+            "Data de entrada/saída", "Valor no XML", "Valor no SPED", "Diferença",
+            "Situação da nota", "Origem do documento", "Observação do sistema"
+        ]
+        writer = csv.DictWriter(output, fieldnames=headers)
+        writer.writeheader()
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+        
+        for row in get_relatorio_stream(empresa_id, periodo, db):
+            diferenca = row.get("diferenca")
+            if isinstance(diferenca, dict) or isinstance(diferenca, list):
+                diferenca = json.dumps(diferenca, ensure_ascii=False)
+                
+            mapped_row = {
+                "Status da conciliação": row.get("status"),
+                "Chave da NF-e": row.get("chave_nfe"),
+                "CNPJ emitente": row.get("cnpj_emitente"),
+                "CNPJ destinatário": row.get("cnpj_destinatario"),
+                "Nome do participante": row.get("nome_participante"),
+                "Modelo": row.get("modelo"),
+                "Série": row.get("serie"),
+                "Número": row.get("numero"),
+                "Data de emissão": row.get("data_emissao"),
+                "Data de entrada/saída": row.get("data_entrada_saida"),
+                "Valor no XML": row.get("valor_xml"),
+                "Valor no SPED": row.get("valor_sped"),
+                "Diferença": diferenca,
+                "Situação da nota": row.get("situacao_nota"),
+                "Origem do documento": row.get("origem_documento"),
+                "Observação do sistema": row.get("observacao"),
+            }
+            writer.writerow(mapped_row)
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+            
     headers = {'Content-Disposition': f'attachment; filename="conciliacao_{periodo}.csv"'}
-    return Response(csv_str, headers=headers, media_type='text/csv')
+    return StreamingResponse(iter_csv(), headers=headers, media_type='text/csv')
 
 @router.get("/{empresa_id}/auditoria/xml")
 def auditoria_xml(empresa_id: str, mes: str, db: Session = Depends(get_db)):

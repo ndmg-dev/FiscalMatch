@@ -9,9 +9,10 @@ class SpedParser:
         self.periodo: Optional[str] = None
         self.empresa_cnpj: Optional[str] = None
 
-    def parse(self, file_content: str):
-        lines = file_content.splitlines()
-        for idx, line in enumerate(lines):
+    def parse_stream(self, lines_iterable):
+        for idx, line in enumerate(lines_iterable):
+            if isinstance(line, bytes):
+                line = line.decode('windows-1252', errors='replace')
             line = line.strip()
             if not line:
                 continue
@@ -27,21 +28,15 @@ class SpedParser:
             elif reg == '0150':
                 self._parse_0150(parts)
             elif reg == 'C100':
-                self._parse_c100(parts, idx + 1)
-                
-        # Resolve participant details in documents
-        for doc in self.documents:
-            cod_part = doc.get("cod_part")
-            if cod_part and cod_part in self.participants:
-                part = self.participants[cod_part]
-                doc["nome_part"] = part.get("nome")
-                doc["cnpj_part"] = part.get("cnpj")
-
-        return {
-            "periodo": self.periodo,
-            "empresa_cnpj": self.empresa_cnpj,
-            "documents": self.documents
-        }
+                doc = self._parse_c100(parts, idx + 1)
+                if doc:
+                    # Resolve participant details immediately
+                    cod_part = doc.get("cod_part")
+                    if cod_part and cod_part in self.participants:
+                        part = self.participants[cod_part]
+                        doc["nome_part"] = part.get("nome")
+                        doc["cnpj_part"] = part.get("cnpj")
+                    yield doc
 
     def _parse_0000(self, parts: List[str]):
         if len(parts) > 5:
@@ -94,7 +89,7 @@ class SpedParser:
             except ValueError:
                 return None
             
-        self.documents.append({
+        return {
             "ind_oper": ind_oper,
             "ind_emit": ind_emit,
             "cod_part": cod_part,
@@ -107,4 +102,4 @@ class SpedParser:
             "data_entrada_saida": parse_date(dt_e_s_str),
             "valor_doc": parse_float(vl_doc_str),
             "linha_original": linha
-        })
+        }

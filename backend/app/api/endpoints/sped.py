@@ -23,12 +23,12 @@ def upload_sped(
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    file_bytes = file.file.read()
+    file_size = file.size
     
-    # Upload to storage for archival
+    # Upload to storage for archival using stream
     storage_path = f"sped/{empresa_id}/{periodo}/{uuid.uuid4()}_{file.filename}"
     try:
-        storage.upload_file(storage_path, file_bytes)
+        storage.upload_stream(storage_path, file.file, length=file_size)
     except Exception as e:
         logger.warning(f"MinIO upload failed (non-critical): {e}")
 
@@ -54,36 +54,42 @@ def upload_sped(
     db.commit()
     db.refresh(arquivo_sped)
 
-    # Parse SPED directly from memory (no MinIO round-trip)
+    # Parse SPED directly from stream
     try:
-        content = file_bytes.decode('windows-1252', errors='replace')
+        file.file.seek(0)
         parser = SpedParser()
-        result = parser.parse(content)
+        docs_generator = parser.parse_stream(file.file)
 
-        docs_to_insert = []
-        for doc in result["documents"]:
+        docs_chunk = []
+        docs_inserted = 0
+        chunk_size = 5000
+
+        for doc in docs_generator:
             doc_data = {
                 "id": uuid.uuid4(),
                 "arquivo_sped_id": arquivo_sped.id,
                 "empresa_id": empresa.id,
             }
             doc_data.update(doc)
-            docs_to_insert.append(doc_data)
-        
-        if docs_to_insert:
-            # chunking insertions to avoid memory spikes and DB locks
-            chunk_size = 5000
-            for i in range(0, len(docs_to_insert), chunk_size):
-                db.bulk_insert_mappings(DocumentoSped, docs_to_insert[i:i + chunk_size])
+            docs_chunk.append(doc_data)
+            
+            if len(docs_chunk) >= chunk_size:
+                db.bulk_insert_mappings(DocumentoSped, docs_chunk)
+                docs_inserted += len(docs_chunk)
+                docs_chunk = []
+                
+        if docs_chunk:
+            db.bulk_insert_mappings(DocumentoSped, docs_chunk)
+            docs_inserted += len(docs_chunk)
 
         arquivo_sped.status = "COMPLETED"
         db.commit()
         
-        logger.info(f"SPED processado: {len(docs_to_insert)} registros C100")
+        logger.info(f"SPED processado: {docs_inserted} registros C100")
         return {
             "message": "Arquivo recebido e processado com sucesso",
             "arquivo_sped_id": str(arquivo_sped.id),
-            "registros_c100": len(docs_to_insert)
+            "registros_c100": docs_inserted
         }
 
     except Exception as e:

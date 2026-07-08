@@ -31,6 +31,16 @@ class StorageService:
         )
         return object_name
 
+    def upload_stream(self, object_name: str, stream, length: int) -> str:
+        self.client.put_object(
+            self.bucket_name,
+            object_name,
+            stream,
+            length=length,
+            part_size=10*1024*1024
+        )
+        return object_name
+
     def get_file(self, object_name: str) -> bytes:
         response = self.client.get_object(self.bucket_name, object_name)
         data = response.read()

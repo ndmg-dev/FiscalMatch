@@ -12,14 +12,23 @@ class ReconciliationService:
 
     def run(self) -> List[Dict[str, Any]]:
         from app.models.sped import ArquivoSped
-        sped_docs = self.db.query(DocumentoSped).join(
+        sped_docs = self.db.query(
+            DocumentoSped.id, DocumentoSped.chave_nfe, DocumentoSped.modelo,
+            DocumentoSped.serie, DocumentoSped.numero, DocumentoSped.cnpj_part,
+            DocumentoSped.ind_oper, DocumentoSped.cod_sit, DocumentoSped.valor_doc,
+            DocumentoSped.data_doc
+        ).join(
             ArquivoSped, DocumentoSped.arquivo_sped_id == ArquivoSped.id
         ).filter(
             DocumentoSped.empresa_id == self.empresa_id,
             ArquivoSped.periodo == self.periodo
-        ).all()
+        ).yield_per(5000)
         
-        xml_docs = self.db.query(DocumentoXML).filter(
+        xml_docs = self.db.query(
+            DocumentoXML.id, DocumentoXML.chave_nfe, DocumentoXML.modelo,
+            DocumentoXML.serie, DocumentoXML.numero, DocumentoXML.cnpj_emitente,
+            DocumentoXML.situacao, DocumentoXML.valor_total, DocumentoXML.data_emissao
+        ).filter(
             DocumentoXML.empresa_id == self.empresa_id,
         ).all()
 
