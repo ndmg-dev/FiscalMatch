@@ -25,14 +25,15 @@ class ReconciliationService:
         sped_docs = self.db.query(
             DocumentoSped.id, DocumentoSped.chave_nfe, DocumentoSped.modelo,
             DocumentoSped.serie, DocumentoSped.numero, DocumentoSped.cnpj_part,
-            DocumentoSped.ind_oper, DocumentoSped.cod_sit, DocumentoSped.valor_doc,
-            DocumentoSped.data_doc
+            DocumentoSped.ind_oper, DocumentoSped.ind_emit, DocumentoSped.cod_sit, 
+            DocumentoSped.valor_doc, DocumentoSped.data_doc
         ).join(
             ArquivoSped, DocumentoSped.arquivo_sped_id == ArquivoSped.id
         ).filter(
             DocumentoSped.empresa_id == self.empresa_id,
             ArquivoSped.periodo == self.periodo,
-            DocumentoSped.ind_oper == '0' # Apenas Entradas (Ind_Oper = 0)
+            DocumentoSped.ind_oper == '0', # Apenas Entradas (Ind_Oper = 0)
+            DocumentoSped.ind_emit == '1'  # Apenas Emissão de Terceiros (Ind_Emit = 1)
         ).all()
         
         xml_docs = self.db.query(
