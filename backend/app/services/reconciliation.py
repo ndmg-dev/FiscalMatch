@@ -17,7 +17,11 @@ class ReconciliationService:
     def run(self) -> List[Dict[str, Any]]:
         logger.info("Iniciando conciliação empresa_id=%s periodo=%s", self.empresa_id, self.periodo)
 
-        from app.models.sped import ArquivoSped
+        from app.models.company import Empresa
+        empresa = self.db.query(Empresa).filter(Empresa.id == self.empresa_id).first()
+        if not empresa:
+            return []
+
         sped_docs = self.db.query(
             DocumentoSped.id, DocumentoSped.chave_nfe, DocumentoSped.modelo,
             DocumentoSped.serie, DocumentoSped.numero, DocumentoSped.cnpj_part,
@@ -27,81 +31,68 @@ class ReconciliationService:
             ArquivoSped, DocumentoSped.arquivo_sped_id == ArquivoSped.id
         ).filter(
             DocumentoSped.empresa_id == self.empresa_id,
-            ArquivoSped.periodo == self.periodo
-        ).yield_per(5000)
+            ArquivoSped.periodo == self.periodo,
+            DocumentoSped.ind_oper == '0' # Apenas Entradas (Ind_Oper = 0)
+        ).all()
         
         xml_docs = self.db.query(
             DocumentoXML.id, DocumentoXML.chave_nfe, DocumentoXML.modelo,
             DocumentoXML.serie, DocumentoXML.numero, DocumentoXML.cnpj_emitente,
-            DocumentoXML.situacao, DocumentoXML.valor_total, DocumentoXML.data_emissao
+            DocumentoXML.cnpj_destinatario, DocumentoXML.situacao, DocumentoXML.valor_total, DocumentoXML.data_emissao
         ).filter(
             DocumentoXML.empresa_id == self.empresa_id,
             func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == self.periodo,
         ).all()
 
-        # O(1) hash maps for XMLs
-        xml_by_chave = {}
-        xml_by_composite = {}
-        for x in xml_docs:
-            if x.chave_nfe:
-                xml_by_chave[x.chave_nfe] = x
+        # O(1) hash maps for SPED
+        sped_by_chave = {}
+        sped_by_composite = {}
+        for s in sped_docs:
+            if s.cod_sit in ('02', '03', '04', '05'):
+                continue # ignore canceled SPED
+            if s.chave_nfe:
+                sped_by_chave[s.chave_nfe] = s
             
-            # composite key: (modelo, serie, numero, cnpj_emitente)
-            # serie em int para evitar problemas de formatação ('001' vs '1')
-            serie_int = int(x.serie) if x.serie and x.serie.isdigit() else x.serie
-            comp_key = (x.modelo, serie_int, x.numero, x.cnpj_emitente)
-            xml_by_composite[comp_key] = x
+            # composite key: (modelo, serie, numero, cnpj_part)
+            serie_int = int(s.serie) if s.serie and s.serie.isdigit() else s.serie
+            comp_key = (s.modelo, serie_int, s.numero, s.cnpj_part)
+            sped_by_composite[comp_key] = s
 
         results = []
-        xml_matched = set()
-
-        for sped in sped_docs:
-            if sped.modelo not in ('55', '65'):
-                results.append(self._build_result("IGNORADA_POR_REGRA", sped, None, "Modelo ignorado no MVP"))
-                continue
-
-            if sped.cod_sit in ('02', '03', '04', '05'):
-                results.append(self._build_result("IGNORADA_POR_REGRA", sped, None, "Documento cancelado/inutilizado no SPED"))
-                continue
-
-            # Find match O(1)
-            matched_xml = None
-            if sped.chave_nfe and sped.chave_nfe in xml_by_chave:
-                matched_xml = xml_by_chave[sped.chave_nfe]
-            else:
-                # Fallback match
-                serie_int = int(sped.serie) if sped.serie and sped.serie.isdigit() else sped.serie
-                if sped.ind_oper == '0': # Entrada, emitente é o terceiro
-                    comp_key = (sped.modelo, serie_int, sped.numero, sped.cnpj_part)
-                    if comp_key in xml_by_composite:
-                        matched_xml = xml_by_composite[comp_key]
-                else: # Saída, emitente é a empresa
-                    # For saída, scan xml_by_composite for keys matching
-                    # (modelo, serie, numero) ignoring CNPJ since the emitter
-                    # is the company itself and we already filtered by empresa_id.
-                    for k, v in xml_by_composite.items():
-                        if k[0] == sped.modelo and k[1] == serie_int and k[2] == sped.numero:
-                            matched_xml = v
-                            break
-            
-            if not matched_xml:
-                results.append(self._build_result("FALTANTE", sped, None, "XML não encontrado"))
-            else:
-                xml_matched.add(matched_xml.id)
-                diffs = self._compare(sped, matched_xml)
-                if diffs:
-                    results.append(self._build_result("DIVERGENTE", sped, matched_xml, "Diferenças nos valores ou metadados", diffs))
-                else:
-                    results.append(self._build_result("OK", sped, matched_xml, "Conciliado com sucesso"))
 
         for xml in xml_docs:
-            if xml.id not in xml_matched:
-                if xml.situacao == "CANCELADA":
-                    results.append(self._build_result("IGNORADA_POR_REGRA", None, xml, "XML cancelado"))
-                elif xml.modelo not in ('55', '65'):
-                    results.append(self._build_result("IGNORADA_POR_REGRA", None, xml, "Modelo ignorado no MVP"))
+            # Filtro 1: Apenas notas de Entrada (emitidas CONTRA a empresa)
+            # Para notas de entrada, a empresa é o destinatário.
+            if xml.cnpj_destinatario != empresa.cnpj:
+                continue
+
+            if xml.situacao == "CANCELADA":
+                continue # Ignora XMLs cancelados na base para não gerar falso "Faltante no SPED"
+
+            if xml.modelo not in ('55', '65'):
+                continue
+
+            # Find match O(1) in SPED
+            matched_sped = None
+            if xml.chave_nfe and xml.chave_nfe in sped_by_chave:
+                matched_sped = sped_by_chave[xml.chave_nfe]
+            else:
+                # Fallback match
+                serie_int = int(xml.serie) if xml.serie and xml.serie.isdigit() else xml.serie
+                comp_key = (xml.modelo, serie_int, xml.numero, xml.cnpj_emitente)
+                if comp_key in sped_by_composite:
+                    matched_sped = sped_by_composite[comp_key]
+            
+            if not matched_sped:
+                # O XML existe, mas NÃO foi encontrado no SPED
+                # Usamos FALTANTE para ser mapeado como Pendência no Histórico e Frontend
+                results.append(self._build_result("FALTANTE", None, xml, "XML não escriturado no SPED"))
+            else:
+                diffs = self._compare(matched_sped, xml)
+                if diffs:
+                    results.append(self._build_result("DIVERGENTE", matched_sped, xml, "Diferenças nos valores ou metadados", diffs))
                 else:
-                    results.append(self._build_result("NAO_ATRIBUIDA", None, xml, "Sem registro correspondente no SPED"))
+                    results.append(self._build_result("OK", matched_sped, xml, "Escriturado corretamente no SPED"))
 
         logger.info(
             "Conciliação finalizada empresa_id=%s periodo=%s: %d resultados",
