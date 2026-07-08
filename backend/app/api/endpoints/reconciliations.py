@@ -184,13 +184,16 @@ def get_relatorio(empresa_id: str, periodo: str, status: str = None, limit: int 
 @router.get("/{empresa_id}/{periodo}/exportar.xlsx")
 def export_excel(empresa_id: str, periodo: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from fastapi.responses import FileResponse
-    import openpyxl, tempfile, json, os
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    import tempfile, json, os
     
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx")
     tmp.close()
     
-    wb = openpyxl.Workbook(write_only=True)
-    ws = wb.create_sheet("Conciliacao")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Conciliação"
     
     headers = [
         "Status da conciliação", "Chave da NF-e", "CNPJ emitente", "CNPJ destinatário",
@@ -200,18 +203,57 @@ def export_excel(empresa_id: str, periodo: str, background_tasks: BackgroundTask
     ]
     ws.append(headers)
     
+    # Estilizar cabeçalho
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    
+    for col_idx, cell in enumerate(ws[1], 1):
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+    
+    row_idx = 2
     for row in get_relatorio_stream(empresa_id, periodo, db):
         diferenca = row.get("diferenca")
         if isinstance(diferenca, dict) or isinstance(diferenca, list):
             diferenca = json.dumps(diferenca, ensure_ascii=False)
             
+        valor_xml = row.get("valor_xml")
+        valor_sped = row.get("valor_sped")
+        
         ws.append([
             row.get("status"), row.get("chave_nfe"), row.get("cnpj_emitente"), row.get("cnpj_destinatario"),
             row.get("nome_participante"), row.get("modelo"), row.get("serie"), row.get("numero"),
-            row.get("data_emissao"), row.get("data_entrada_saida"), row.get("valor_xml"),
-            row.get("valor_sped"), diferenca, row.get("situacao_nota"),
+            row.get("data_emissao"), row.get("data_entrada_saida"), valor_xml,
+            valor_sped, diferenca, row.get("situacao_nota"),
             row.get("origem_documento"), row.get("observacao")
         ])
+        
+        # Formatar células da linha atual
+        for col, val in enumerate(ws[row_idx], 1):
+            val.alignment = Alignment(vertical="center")
+            
+            # Colunas de valor (K e L -> 11 e 12)
+            if col in (11, 12):
+                val.number_format = '#,##0.00'
+        
+        row_idx += 1
+        
+    # Auto-ajustar largura das colunas
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min((max_length + 2), 40) # limite máximo de 40 para não ficar gigante
+        ws.column_dimensions[column].width = adjusted_width
+        
+    ws.auto_filter.ref = ws.dimensions
         
     wb.save(tmp.name)
     background_tasks.add_task(os.remove, tmp.name)
