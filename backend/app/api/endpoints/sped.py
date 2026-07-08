@@ -28,12 +28,17 @@ def upload_sped(
     file_bytes = file.file.read()
     file_size = len(file_bytes)
     
-    # Upload to storage for archival using stream
+    # Upload to storage for archival using stream in a background daemon thread
     storage_path = f"sped/{empresa_id}/{periodo}/{uuid.uuid4()}_{file.filename}"
-    try:
-        storage.upload_stream(storage_path, io.BytesIO(file_bytes), length=file_size)
-    except Exception as e:
-        logger.warning(f"MinIO upload failed (non-critical): {e}")
+    
+    def upload_bg():
+        try:
+            storage.upload_stream(storage_path, io.BytesIO(file_bytes), length=file_size)
+        except Exception as e:
+            logger.warning(f"MinIO upload failed (non-critical): {e}")
+            
+    import threading
+    threading.Thread(target=upload_bg, daemon=True).start()
 
     try:
         # Remove old SPED files and their parsed documents for the same empresa+periodo
