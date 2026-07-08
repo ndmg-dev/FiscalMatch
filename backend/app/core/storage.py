@@ -55,4 +55,23 @@ class StorageService:
             response.close()
             response.release_conn()
 
+    def delete_company_files(self, empresa_id: str):
+        from minio.deleteobjects import DeleteObject
+        
+        # Delete XMLs
+        xml_objects = self.client.list_objects(self.bucket_name, prefix=f"xml/{empresa_id}/", recursive=True)
+        xml_delete_list = [DeleteObject(obj.object_name) for obj in xml_objects]
+        if xml_delete_list:
+            errors = self.client.remove_objects(self.bucket_name, xml_delete_list)
+            for error in errors:
+                print("Error deleting xml object:", error)
+                
+        # Delete SPEDs
+        sped_objects = self.client.list_objects(self.bucket_name, prefix=f"sped/{empresa_id}/", recursive=True)
+        sped_delete_list = [DeleteObject(obj.object_name) for obj in sped_objects]
+        if sped_delete_list:
+            errors = self.client.remove_objects(self.bucket_name, sped_delete_list)
+            for error in errors:
+                print("Error deleting sped object:", error)
+
 storage = StorageService()

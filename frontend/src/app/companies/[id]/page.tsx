@@ -10,6 +10,7 @@ export default function CompanyDetailsPage() {
   const router = useRouter()
   const [company, setCompany] = useState<any>(null)
   const [history, setHistory] = useState<any[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Tabs: 'conciliacao' | 'base_dados' | 'auditoria'
   const [activeTab, setActiveTab] = useState<'conciliacao' | 'base_dados' | 'auditoria'>('conciliacao')
@@ -234,22 +235,55 @@ export default function CompanyDetailsPage() {
     )
   }
 
+  const handleDeleteCompany = async () => {
+    if (!confirm(`Tem certeza que deseja EXCLUIR a empresa ${company.razao_social} e TODOS os dados importados (XMLs, SPEDs e Históricos)? Esta ação não pode ser desfeita.`)) {
+      return
+    }
+    
+    setIsDeleting(true)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/empresas/${id}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) {
+        throw new Error('Erro ao excluir empresa')
+      }
+      router.push('/companies')
+    } catch (err: any) {
+      alert(err.message)
+      setIsDeleting(false)
+    }
+  }
+
   const isProcessing = processingState !== 'idle'
 
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/companies" className="text-[var(--foreground-muted)] hover:text-[var(--gold)] transition-colors">
-          <ArrowLeft size={22} />
-        </Link>
-        <div>
-          <h1 className="page-title">
-            <FileText />
-            {company.razao_social}
-          </h1>
-          <p className="text-sm text-[var(--foreground-muted)] mt-1 ml-10">CNPJ: {company.cnpj}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/companies" className="text-[var(--foreground-muted)] hover:text-[var(--gold)] transition-colors">
+            <ArrowLeft size={22} />
+          </Link>
+          <div>
+            <h1 className="page-title">
+              <FileText />
+              {company.razao_social}
+            </h1>
+            <p className="text-sm text-[var(--foreground-muted)] mt-1 ml-10">CNPJ: {company.cnpj}</p>
+          </div>
         </div>
+        <button
+          onClick={handleDeleteCompany}
+          disabled={isDeleting || isProcessing}
+          className="bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors disabled:opacity-50"
+        >
+          {isDeleting ? 'Excluindo...' : (
+             <>
+               <AlertCircle size={16} /> Excluir Empresa
+             </>
+          )}
+        </button>
       </div>
 
       {/* Message */}
