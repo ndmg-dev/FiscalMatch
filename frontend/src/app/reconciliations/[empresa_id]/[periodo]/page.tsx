@@ -88,16 +88,13 @@ export default function ReconciliationReportPage() {
     IGNORADA_POR_REGRA: 'badge-ignored',
   }
 
-  const uniqueStatuses = ['OK', 'FALTANTE', 'DIVERGENTE', 'IGNORADA_POR_REGRA', 'NAO_ATRIBUIDA']
+  const uniqueStatuses = ['OK', 'FALTANTE']
   const filteredReport = report
 
   // Use stats from backend if available, otherwise fallback to calculating from loaded records
   const displayStats = stats ? {
     'OK': stats.ok,
     'FALTANTE': stats.faltante,
-    'DIVERGENTE': stats.divergente,
-    'IGNORADA_POR_REGRA': stats.ignorada || 0,
-    'NAO_ATRIBUIDA': stats.nao_atribuida || 0,
     'Total Registros': stats.total
   } : report.reduce((acc, curr) => {
     acc[curr.status] = (acc[curr.status] || 0) + 1
