@@ -34,40 +34,54 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     actionable = ok_count + faltante_count + divergente_count + nao_atribuida_count
     compliance_rate = round((ok_count / actionable) * 100, 1) if actionable > 0 else 0
 
-    # Recent reconciliations by empresa + periodo
-    recent_raw = (
+    from sqlalchemy import case
+    # Attention ranking: get all groupings and sort by worst compliance
+    attention_raw = (
         db.query(
             Conciliacao.empresa_id,
             Conciliacao.periodo,
             func.count(Conciliacao.id).label("total"),
+            func.sum(case((Conciliacao.status == 'OK', 1), else_=0)).label("ok"),
+            func.sum(case((Conciliacao.status == 'FALTANTE', 1), else_=0)).label("faltante"),
+            func.sum(case((Conciliacao.status == 'DIVERGENTE', 1), else_=0)).label("divergente"),
             func.max(Conciliacao.created_at).label("last_run"),
         )
         .group_by(Conciliacao.empresa_id, Conciliacao.periodo)
-        .order_by(func.max(Conciliacao.created_at).desc())
-        .limit(5)
         .all()
     )
 
-    recent = []
-    for r in recent_raw:
+    attention_list = []
+    for r in attention_raw:
         empresa = db.query(Empresa).filter(Empresa.id == r.empresa_id).first()
-        # Get status breakdown for this specific reconciliation
-        statuses = dict(
-            db.query(Conciliacao.status, func.count(Conciliacao.id))
-            .filter(Conciliacao.empresa_id == r.empresa_id, Conciliacao.periodo == r.periodo)
-            .group_by(Conciliacao.status)
-            .all()
-        )
-        recent.append({
-            "empresa_id": str(r.empresa_id),
-            "empresa_nome": empresa.razao_social if empresa else "Desconhecida",
-            "periodo": r.periodo,
-            "total": r.total,
-            "ok": statuses.get("OK", 0),
-            "faltante": statuses.get("FALTANTE", 0),
-            "divergente": statuses.get("DIVERGENTE", 0),
-            "last_run": r.last_run.isoformat() if r.last_run else None,
-        })
+        
+        ok = int(r.ok) if r.ok else 0
+        faltante = int(r.faltante) if r.faltante else 0
+        divergente = int(r.divergente) if r.divergente else 0
+        total = ok + faltante + divergente
+        
+        # Calculate a penalty score (more missing/divergent = higher score)
+        # We also consider compliance rate
+        compliance = (ok / total) if total > 0 else 1.0
+        penalty_score = (faltante + divergente) * (1 - compliance)
+        
+        # Only add to attention list if there is a problem
+        if (faltante + divergente) > 0:
+            attention_list.append({
+                "empresa_id": str(r.empresa_id),
+                "empresa_nome": empresa.razao_social if empresa else "Desconhecida",
+                "periodo": r.periodo,
+                "total": r.total,
+                "ok": ok,
+                "faltante": faltante,
+                "divergente": divergente,
+                "last_run": r.last_run.isoformat() if r.last_run else None,
+                "penalty_score": penalty_score,
+                "compliance_rate": round(compliance * 100, 1)
+            })
+
+    # Sort by highest penalty score, keep top 10
+    attention_list.sort(key=lambda x: x["penalty_score"], reverse=True)
+    recent = attention_list[:10]
 
     # Empresas list with counts
     empresas = db.query(Empresa).all()

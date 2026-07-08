@@ -144,85 +144,19 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Compliance + Status Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Compliance Gauge */}
-        <div className="glass-card rounded-2xl p-6 flex flex-col items-center justify-center">
-          <TrendingUp size={20} className="text-[var(--gold)] mb-3" />
-          <h3 className="text-sm font-medium text-[var(--foreground-muted)] mb-4">Taxa de Conformidade</h3>
-          <div className="relative w-36 h-36 flex items-center justify-center">
-            <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(201,168,76,0.1)" strokeWidth="10" />
-              <circle
-                cx="60" cy="60" r="52" fill="none"
-                stroke="url(#goldGradient)" strokeWidth="10"
-                strokeLinecap="round"
-                strokeDasharray={`${(data.compliance_rate / 100) * 327} 327`}
-                className="transition-all duration-1000 ease-out"
-              />
-              <defs>
-                <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#c9a84c" />
-                  <stop offset="100%" stopColor="#d4b85c" />
-                </linearGradient>
-              </defs>
-            </svg>
-            <span className="absolute text-3xl font-bold text-[var(--gold)]">
-              {data.compliance_rate}%
-            </span>
-          </div>
-          <p className="text-xs text-[var(--foreground-muted)] mt-4 text-center">
-            {data.status_breakdown.OK} de {totalActionable} notas conciliadas com sucesso
-          </p>
-        </div>
-
-        {/* Status Breakdown */}
-        <div className="glass-card rounded-2xl p-6 lg:col-span-2">
-          <h3 className="text-sm font-medium text-[var(--foreground-muted)] mb-5 flex items-center gap-2">
-            <Activity size={16} className="text-[var(--gold)]" />
-            Distribuição por Status
-          </h3>
-          <div className="space-y-4">
-            {[
-              { label: 'Conciliado (OK)', value: data.status_breakdown.OK, color: 'bg-emerald-500', textColor: 'text-emerald-400' },
-              { label: 'Faltante', value: data.status_breakdown.FALTANTE, color: 'bg-red-500', textColor: 'text-red-400' },
-              { label: 'Divergente', value: data.status_breakdown.DIVERGENTE, color: 'bg-amber-500', textColor: 'text-amber-400' },
-              { label: 'Não Atribuída', value: data.status_breakdown.NAO_ATRIBUIDA, color: 'bg-blue-500', textColor: 'text-blue-400' },
-              { label: 'Ignorada por Regra', value: data.status_breakdown.IGNORADA_POR_REGRA, color: 'bg-gray-500', textColor: 'text-gray-400' },
-            ].map(item => {
-              const pct = data.total_conciliacoes > 0 ? (item.value / data.total_conciliacoes) * 100 : 0
-              return (
-                <div key={item.label} className="group">
-                  <div className="flex items-center justify-between text-sm mb-1.5">
-                    <span className={`font-medium ${item.textColor}`}>{item.label}</span>
-                    <span className="text-[var(--foreground-muted)]">{item.value.toLocaleString('pt-BR')} <span className="text-xs">({pct.toFixed(1)}%)</span></span>
-                  </div>
-                  <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${item.color} transition-all duration-700 ease-out`}
-                      style={{ width: `${Math.max(pct, 0.5)}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Two columns: Recent + Companies */}
+      {/* Two columns: Ranking de Atenção + Companies */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Reconciliations */}
-        <div className="glass-card rounded-2xl p-6">
+        {/* Ranking de Atenção */}
+        <div className="glass-card rounded-2xl p-6 border-red-500/20">
           <div className="flex items-center justify-between mb-5">
-            <h3 className="text-sm font-medium text-[var(--foreground-muted)] flex items-center gap-2">
-              <Clock size={16} className="text-[var(--gold)]" />
-              Conciliações Recentes
+            <h3 className="text-sm font-medium text-red-400 flex items-center gap-2">
+              <AlertTriangle size={16} />
+              Requer Atenção (Piores Índices)
             </h3>
           </div>
           {data.recent_reconciliations.length === 0 ? (
             <div className="text-center py-8 text-[var(--foreground-muted)] text-sm">
-              Nenhuma conciliação realizada ainda.
+              Nenhuma pendência encontrada.
             </div>
           ) : (
             <div className="space-y-3">
@@ -230,26 +164,33 @@ export default function Home() {
                 <Link
                   key={i}
                   href={`/reconciliations/${r.empresa_id}/${r.periodo}`}
-                  className="block p-4 rounded-xl border border-[var(--card-border)] hover:border-[var(--gold-border)] hover:bg-[var(--gold-glow)] transition-all group"
+                  className="block p-4 rounded-xl border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 hover:border-red-500/40 transition-all group"
                 >
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-3">
                     <div>
-                      <p className="text-sm font-semibold text-[var(--foreground)] group-hover:text-[var(--gold)] transition-colors truncate max-w-[220px]">{r.empresa_nome}</p>
-                      <p className="text-xs text-[var(--foreground-muted)] mt-0.5">Período: {r.periodo}</p>
+                      <p className="text-sm font-bold text-red-100 group-hover:text-white transition-colors truncate max-w-[220px]">{r.empresa_nome}</p>
+                      <p className="text-xs text-red-300/70 mt-0.5">Período: {r.periodo}</p>
                     </div>
-                    <span className="text-xs text-[var(--foreground-muted)] whitespace-nowrap">{timeAgo(r.last_run)}</span>
+                    <div className="text-right">
+                      <span className="text-lg font-bold text-red-400">
+                        {((r as any).compliance_rate || 0).toFixed(1)}%
+                      </span>
+                      <p className="text-[10px] text-red-400/60 uppercase tracking-wide">Conformidade</p>
+                    </div>
                   </div>
-                  <div className="flex gap-3 text-xs">
-                    <span className="flex items-center gap-1 text-emerald-400">
-                      <CheckCircle size={12} /> {r.ok.toLocaleString('pt-BR')}
+                  <div className="w-full h-1.5 bg-red-950 rounded-full overflow-hidden mb-3">
+                    <div
+                      className="h-full bg-red-500 rounded-full"
+                      style={{ width: `${(r as any).compliance_rate || 0}%` }}
+                    />
+                  </div>
+                  <div className="flex gap-4 text-xs">
+                    <span className="flex items-center gap-1.5 text-red-400 font-medium">
+                      <XCircle size={14} /> {r.faltante.toLocaleString('pt-BR')} faltantes
                     </span>
-                    <span className="flex items-center gap-1 text-red-400">
-                      <XCircle size={12} /> {r.faltante.toLocaleString('pt-BR')}
+                    <span className="flex items-center gap-1.5 text-amber-400 font-medium">
+                      <AlertTriangle size={14} /> {r.divergente.toLocaleString('pt-BR')} divergentes
                     </span>
-                    <span className="flex items-center gap-1 text-amber-400">
-                      <AlertTriangle size={12} /> {r.divergente.toLocaleString('pt-BR')}
-                    </span>
-                    <span className="text-[var(--foreground-muted)] ml-auto">{r.total.toLocaleString('pt-BR')} total</span>
                   </div>
                 </Link>
               ))}
