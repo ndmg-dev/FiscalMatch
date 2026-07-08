@@ -62,13 +62,8 @@ class ReconciliationService:
         results = []
 
         for xml in xml_docs:
-            # Filtro 1: Apenas notas de Entrada (emitidas CONTRA a empresa)
-            # Para notas de entrada, a empresa é o destinatário.
-            if xml.cnpj_destinatario != empresa.cnpj:
-                continue
-
             if xml.situacao == "CANCELADA":
-                continue # Ignora XMLs cancelados na base para não gerar falso "Faltante no SPED"
+                continue # Ignora XMLs cancelados na base
 
             if xml.modelo not in ('55', '65'):
                 continue
@@ -85,9 +80,9 @@ class ReconciliationService:
                     matched_sped = sped_by_composite[comp_key]
             
             if not matched_sped:
-                # O XML existe, mas NÃO foi encontrado no SPED
-                # Usamos FALTANTE para ser mapeado como Pendência no Histórico e Frontend
-                results.append(self._build_result("FALTANTE", None, xml, "XML não escriturado no SPED"))
+                # Usuário solicitou que o relatório acuse SOMENTE o que foi encontrado no SPED,
+                # para que não fiquem "milhares de itens faltosos acusados na interface" (XMLs de saída/lixo)
+                continue
             else:
                 diffs = self._compare(matched_sped, xml)
                 if diffs:
