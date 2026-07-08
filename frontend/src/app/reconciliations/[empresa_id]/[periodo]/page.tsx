@@ -19,8 +19,9 @@ export default function ReconciliationReportPage() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
 
   useEffect(() => {
+    setLoading(true)
     Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000`).then(res => res.json()),
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/${periodo}/relatorio?limit=1000&status=${statusFilter}`).then(res => res.json()),
       fetch(`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${empresa_id}/historico`).then(res => res.json())
     ]).then(([reportData, historyData]) => {
       setReport(reportData)
@@ -30,7 +31,7 @@ export default function ReconciliationReportPage() {
       }
       setLoading(false)
     })
-  }, [empresa_id, periodo])
+  }, [empresa_id, periodo, statusFilter])
 
   const toggleRow = (id: string) => {
     const next = new Set(expandedRows)
@@ -78,8 +79,8 @@ export default function ReconciliationReportPage() {
     IGNORADA_POR_REGRA: 'badge-ignored',
   }
 
-  const uniqueStatuses = Array.from(new Set(report.map(r => r.status)))
-  const filteredReport = statusFilter === 'ALL' ? report : report.filter(r => r.status === statusFilter)
+  const uniqueStatuses = ['OK', 'FALTANTE', 'DIVERGENTE', 'IGNORADA_POR_REGRA', 'NAO_ATRIBUIDA']
+  const filteredReport = report
 
   // Use stats from backend if available, otherwise fallback to calculating from loaded records
   const displayStats = stats ? {

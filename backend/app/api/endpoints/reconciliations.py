@@ -120,7 +120,7 @@ def run_reconciliation(empresa_id: str, periodo: str, sync_sieg: bool = False, d
     return {"message": "Conciliação executada com sucesso", "total_registros": len(results), "warning": warning}
 
 @router.get("/{empresa_id}/{periodo}/relatorio")
-def get_relatorio(empresa_id: str, periodo: str, limit: int = None, db: Session = Depends(get_db)):
+def get_relatorio(empresa_id: str, periodo: str, status: str = None, limit: int = None, db: Session = Depends(get_db)):
     from app.models.xml import DocumentoXML
     from app.models.sped import DocumentoSped
     
@@ -131,6 +131,12 @@ def get_relatorio(empresa_id: str, periodo: str, limit: int = None, db: Session 
             Conciliacao.empresa_id == empresa_id,
             Conciliacao.periodo == periodo
         )
+        
+    if status and status != 'ALL':
+        query = query.filter(Conciliacao.status == status)
+        
+    # Order by status, then created_at to have a consistent order
+    query = query.order_by(Conciliacao.status.desc(), Conciliacao.created_at.desc())
         
     if limit is not None:
         query = query.limit(limit)
