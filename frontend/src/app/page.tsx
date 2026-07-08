@@ -188,10 +188,6 @@ export default function Home() {
                       <span className="w-2 h-2 rounded-full bg-red-400"></span>
                       {r.faltante.toLocaleString('pt-BR')} Faltantes no SPED
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-                      {r.divergente.toLocaleString('pt-BR')} Divergentes
-                    </span>
                   </div>
                 </Link>
               ))}

@@ -91,7 +91,7 @@ class ReconciliationService:
             else:
                 diffs = self._compare(matched_sped, xml)
                 if diffs:
-                    results.append(self._build_result("DIVERGENTE", matched_sped, xml, "Diferenças nos valores ou metadados", diffs))
+                    results.append(self._build_result("OK", matched_sped, xml, "Conciliado com divergências", diffs))
                 else:
                     results.append(self._build_result("OK", matched_sped, xml, "Escriturado corretamente no SPED"))
 

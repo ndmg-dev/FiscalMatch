@@ -468,8 +468,8 @@ export default function CompanyDetailsPage() {
                         <span className="text-green-400 font-medium">{Number(h.ok).toLocaleString('pt-BR')}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[var(--foreground-muted)]">Pendências</span>
-                        <span className="text-red-400 font-medium">{Number((h.divergente || 0) + (h.faltante || 0)).toLocaleString('pt-BR')}</span>
+                        <span className="text-[var(--foreground-muted)]">Faltantes no SPED</span>
+                        <span className="text-red-400 font-medium">{Number(h.faltante || 0).toLocaleString('pt-BR')}</span>
                       </div>
                     </div>
                     {h.last_run && (
