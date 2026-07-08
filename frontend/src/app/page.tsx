@@ -181,12 +181,12 @@ export default function Home() {
                   
                   <div className="flex justify-between items-center text-xs text-[var(--foreground-muted)]">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      {r.ok.toLocaleString('pt-BR')} OK
+                      <FileText size={12} className="text-[var(--gold)]" />
+                      {r.total.toLocaleString('pt-BR')} XMLs na base
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-red-400"></span>
-                      {r.faltante.toLocaleString('pt-BR')} Faltantes no SPED
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      {r.ok.toLocaleString('pt-BR')} Achados no SPED
                     </span>
                   </div>
                 </Link>

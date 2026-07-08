@@ -460,16 +460,12 @@ export default function CompanyDetailsPage() {
                     </div>
                     <div className="space-y-2 text-sm flex-grow">
                       <div className="flex justify-between">
-                        <span className="text-[var(--foreground-muted)]">Total Registros</span>
+                        <span className="text-[var(--foreground-muted)]">XMLs na base</span>
                         <span className="text-[var(--foreground)] font-medium">{Number(h.total).toLocaleString('pt-BR')}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-[var(--foreground-muted)]">Conciliados (OK)</span>
+                        <span className="text-[var(--foreground-muted)] flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500"></span> Achados no SPED</span>
                         <span className="text-green-400 font-medium">{Number(h.ok).toLocaleString('pt-BR')}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-[var(--foreground-muted)]">Faltantes no SPED</span>
-                        <span className="text-red-400 font-medium">{Number(h.faltante || 0).toLocaleString('pt-BR')}</span>
                       </div>
                     </div>
                     {h.last_run && (
