@@ -498,7 +498,14 @@ export default function CompanyDetailsPage() {
                       method: 'POST',
                       body: formDataXml,
                     });
-                    if (!xmlRes.ok) throw new Error('Erro ao fazer upload dos XMLs');
+                    if (!xmlRes.ok) {
+                      let errMsg = 'Erro ao fazer upload dos XMLs';
+                      try {
+                        const errData = await xmlRes.json();
+                        if (errData && errData.detail) errMsg = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+                      } catch (e) {}
+                      throw new Error(errMsg);
+                    }
                     const xmlResData = await xmlRes.json();
                     
                     if (xmlResData.results) {

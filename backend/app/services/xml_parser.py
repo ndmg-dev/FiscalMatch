@@ -54,10 +54,22 @@ class XMLParser:
                 pass
 
         emit = infNFe.find('emit')
-        cnpj_emitente = emit.findtext('CNPJ') if emit is not None else None
+        cnpj_emitente = None
+        if emit is not None:
+            cnpj_emitente = emit.findtext('CNPJ')
+            if not cnpj_emitente:
+                cnpj_emitente = emit.findtext('CPF')
+                
+        # If it's still missing, provide a fallback to avoid DB NOT NULL crash
+        if not cnpj_emitente:
+            cnpj_emitente = "00000000000000"
 
         dest = infNFe.find('dest')
-        cnpj_destinatario = dest.findtext('CNPJ') if dest is not None else None
+        cnpj_destinatario = None
+        if dest is not None:
+            cnpj_destinatario = dest.findtext('CNPJ')
+            if not cnpj_destinatario:
+                cnpj_destinatario = dest.findtext('CPF')
 
         total = infNFe.find('.//total/ICMSTot')
         valor_total = None
