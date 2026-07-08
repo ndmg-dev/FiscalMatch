@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from app.models.sped import DocumentoSped
+from app.models.sped import DocumentoSped, ArquivoSped
 from app.models.xml import DocumentoXML
 from sqlalchemy.orm import Session
 from sqlalchemy import func
