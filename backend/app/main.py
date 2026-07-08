@@ -9,6 +9,14 @@ from app.api.endpoints import companies, sped, xml, reconciliations, sieg, dashb
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    
+    # Criar índices faltantes para evitar scans completos da tabela (Table Scans O(N))
+    # nas validações de integridade referencial do Postgres (causadoras dos travamentos)
+    with engine.begin() as conn:
+        from sqlalchemy import text
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_conciliacoes_doc_fiscal ON conciliacoes(documento_fiscal_id);"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_conciliacoes_doc_sped ON conciliacoes(documento_sped_id);"))
+        
     yield
 
 app = FastAPI(
