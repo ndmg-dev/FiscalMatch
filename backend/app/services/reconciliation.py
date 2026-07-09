@@ -32,17 +32,22 @@ class ReconciliationService:
         ).filter(
             DocumentoSped.empresa_id == self.empresa_id,
             ArquivoSped.periodo == self.periodo,
-            DocumentoSped.ind_oper == '0', # Apenas Entradas (Ind_Oper = 0)
-            DocumentoSped.ind_emit == '1'  # Apenas Emissão de Terceiros (Ind_Emit = 1)
         ).all()
         
+        sped_chaves = [s.chave_nfe for s in sped_docs if s.chave_nfe]
+
+        from sqlalchemy import or_
+
         xml_docs = self.db.query(
             DocumentoXML.id, DocumentoXML.chave_nfe, DocumentoXML.modelo,
             DocumentoXML.serie, DocumentoXML.numero, DocumentoXML.cnpj_emitente,
             DocumentoXML.cnpj_destinatario, DocumentoXML.situacao, DocumentoXML.valor_total, DocumentoXML.data_emissao
         ).filter(
             DocumentoXML.empresa_id == self.empresa_id,
-            func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == self.periodo,
+            or_(
+                func.to_char(DocumentoXML.data_emissao, 'YYYY-MM') == self.periodo,
+                DocumentoXML.chave_nfe.in_(sped_chaves) if sped_chaves else False
+            )
         ).all()
 
         # O(1) hash maps for SPED
@@ -66,12 +71,6 @@ class ReconciliationService:
                 continue # Ignora XMLs cancelados na base
 
             if xml.modelo not in ('55', '65'):
-                continue
-                
-            # Ignora notas de saída (Emissão Própria) para não poluir o relatório.
-            # Usamos essa checagem em vez de checar o destinatário estritamente para 
-            # permitir testes com empresas de CNPJ fictício.
-            if xml.cnpj_emitente == empresa.cnpj:
                 continue
 
             # Find match O(1) in SPED
