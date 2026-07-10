@@ -129,17 +129,21 @@ def upload_xml(
         if chave in existing_map:
             doc = existing_map[chave]
             for k, v in parsed.items():
-                setattr(doc, k, v)
+                if k != "is_evento" and v is not None:
+                    setattr(doc, k, v)
             doc.origem = "UPLOAD"
+            # Keep original storage path if this is just an event update, or overwrite? Overwrite is fine to keep the latest file.
             doc.storage_path = storage_path
             docs_to_update.append(doc)
         else:
+            parsed_copy = parsed.copy()
+            parsed_copy.pop("is_evento", None)
             new_doc = DocumentoXML(
                 id=uuid.uuid4(),
                 empresa_id=empresa_id,
                 origem="UPLOAD",
                 storage_path=storage_path,
-                **parsed
+                **parsed_copy
             )
             new_docs.append(new_doc)
             # Add to map to prevent duplicates in the same batch

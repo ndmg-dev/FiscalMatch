@@ -23,6 +23,25 @@ class XMLParser:
             if '}' in elem.tag:
                 elem.tag = elem.tag.split('}', 1)[1]
 
+        # Check if it's an Event XML (like a cancellation)
+        if root.tag == 'procEventoNFe' or root.find('.//procEventoNFe') is not None:
+            tpEvento = root.find('.//tpEvento')
+            if tpEvento is not None and tpEvento.text in ('110111', '110112', '110113'):
+                chNFe = root.find('.//chNFe')
+                if chNFe is not None:
+                    return {
+                        "chave_nfe": chNFe.text,
+                        "modelo": None,
+                        "serie": None,
+                        "numero": None,
+                        "cnpj_emitente": None,
+                        "cnpj_destinatario": None,
+                        "data_emissao": None,
+                        "valor_total": None,
+                        "situacao": "CANCELADA",
+                        "is_evento": True
+                    }
+
         infNFe = root.find('.//infNFe')
         if infNFe is None:
             raise ValueError("Not an NF-e model 55/65 XML (missing infNFe tag)")
