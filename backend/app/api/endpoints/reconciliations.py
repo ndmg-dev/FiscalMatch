@@ -236,6 +236,122 @@ def export_faltantes_excel(empresa_id: str, background_tasks: BackgroundTasks, d
         media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
+def _fmt_brl(value):
+    """Formata número no padrão R$ 1.234,56."""
+    if value is None:
+        return "-"
+    s = f"{float(value):,.2f}"
+    return "R$ " + s.replace(",", "X").replace(".", ",").replace("X", ".")
+
+@router.get("/{empresa_id}/faltantes/exportar.pdf")
+def export_faltantes_pdf(empresa_id: str, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Relatório consolidado em PDF: todas as notas faltantes (XML não
+    encontrado no SPED) de todos os períodos já conciliados da empresa."""
+    from fastapi.responses import FileResponse
+    from datetime import datetime
+    import tempfile, os
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+    empresa = db.query(Empresa).filter(Empresa.id == empresa_id).first()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    # Paleta (consistente com o tema do app)
+    DARK = colors.HexColor("#1E293B")
+    GOLD = colors.HexColor("#C8A24B")
+    ZEBRA = colors.HexColor("#F3F4F6")
+    MUTED = colors.HexColor("#64748B")
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("t", parent=styles["Title"], fontSize=16, textColor=DARK, spaceAfter=2)
+    sub_style = ParagraphStyle("s", parent=styles["Normal"], fontSize=10, textColor=MUTED, spaceAfter=1)
+    cell_style = ParagraphStyle("c", parent=styles["Normal"], fontSize=6.5, leading=8)
+    cellc_style = ParagraphStyle("cc", parent=cell_style, alignment=1)
+    head_style = ParagraphStyle("h", parent=styles["Normal"], fontSize=7, leading=8,
+                                textColor=colors.white, fontName="Helvetica-Bold", alignment=1)
+
+    col_headers = ["Período", "Chave da NF-e", "CNPJ emitente", "Mod.", "Série",
+                   "Número", "Emissão", "Valor (R$)", "Situação"]
+    data = [[Paragraph(h, head_style) for h in col_headers]]
+
+    total_count = 0
+    total_valor = 0.0
+    for row in get_faltantes_stream(empresa_id, db):
+        total_count += 1
+        if row.get("valor_xml"):
+            total_valor += float(row["valor_xml"])
+        data.append([
+            Paragraph(str(row.get("periodo") or "-"), cellc_style),
+            Paragraph(str(row.get("chave_nfe") or "-"), cell_style),
+            Paragraph(str(row.get("cnpj_emitente") or "-"), cell_style),
+            Paragraph(str(row.get("modelo") or "-"), cellc_style),
+            Paragraph(str(row.get("serie") or "-"), cellc_style),
+            Paragraph(str(row.get("numero") or "-"), cellc_style),
+            Paragraph(str(row.get("data_emissao") or "-"), cellc_style),
+            Paragraph(_fmt_brl(row.get("valor_xml")), ParagraphStyle("r", parent=cell_style, alignment=2)),
+            Paragraph(str(row.get("situacao_nota") or "-"), cellc_style),
+        ])
+
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    tmp.close()
+
+    doc = SimpleDocTemplate(
+        tmp.name, pagesize=landscape(A4),
+        leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=14 * mm,
+        title="Relatório de Notas Faltantes",
+    )
+
+    elements = [
+        Paragraph("Relatório de Notas Faltantes", title_style),
+        Paragraph(f"{empresa.razao_social} &nbsp;·&nbsp; CNPJ {empresa.cnpj}" + (f" &nbsp;·&nbsp; {empresa.uf}" if empresa.uf else ""), sub_style),
+        Paragraph("Notas com XML na base, porém não encontradas no SPED (todos os períodos conciliados).", sub_style),
+        Paragraph(f"Gerado em {datetime.now().strftime('%d/%m/%Y às %H:%M')} &nbsp;·&nbsp; <b>{total_count}</b> nota(s) &nbsp;·&nbsp; Valor total: <b>{_fmt_brl(total_valor)}</b>", sub_style),
+        Spacer(1, 6 * mm),
+    ]
+
+    if total_count == 0:
+        elements.append(Paragraph("Nenhuma nota faltante encontrada para esta empresa.", cell_style))
+    else:
+        # larguras (soma ~ 273mm úteis em A4 paisagem com margens)
+        col_widths = [16 * mm, 92 * mm, 30 * mm, 11 * mm, 12 * mm, 22 * mm, 20 * mm, 28 * mm, 22 * mm]
+        table = Table(data, colWidths=col_widths, repeatRows=1)
+        style = [
+            ("BACKGROUND", (0, 0), (-1, 0), DARK),
+            ("LINEBELOW", (0, 0), (-1, 0), 1.2, GOLD),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("LEFTPADDING", (0, 0), (-1, -1), 3),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#E2E8F0")),
+        ]
+        for i in range(1, len(data)):
+            if i % 2 == 0:
+                style.append(("BACKGROUND", (0, i), (-1, i), ZEBRA))
+        table.setStyle(TableStyle(style))
+        elements.append(table)
+
+    def _footer(canvas, doc_):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(MUTED)
+        canvas.drawString(12 * mm, 7 * mm, "FiscalMatch · Relatório de notas faltantes")
+        canvas.drawRightString(landscape(A4)[0] - 12 * mm, 7 * mm, f"Página {doc_.page}")
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=_footer, onLaterPages=_footer)
+    background_tasks.add_task(os.remove, tmp.name)
+
+    return FileResponse(
+        path=tmp.name,
+        filename=f"faltantes_consolidado_{empresa_id}.pdf",
+        media_type="application/pdf",
+    )
+
 @router.get("/{empresa_id}/{periodo}/relatorio")
 def get_relatorio(empresa_id: str, periodo: str, status: str = None, limit: int = None, db: Session = Depends(get_db)):
     from app.models.xml import DocumentoXML

@@ -446,13 +446,23 @@ export default function CompanyDetailsPage() {
                 <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
               </h2>
               {history.length > 0 && (
-                <a
-                  href={`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/faltantes/exportar.xlsx`}
-                  className="text-sm font-bold text-black bg-[var(--gold)] hover:opacity-90 px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity whitespace-nowrap"
-                  title="Gera um único Excel com as notas faltantes (XML não encontrado no SPED) de todos os períodos já conciliados desta empresa."
-                >
-                  <Download size={16} /> Exportar faltantes (todos os períodos)
-                </a>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-[var(--foreground-muted)] mr-1">Faltantes (todos os períodos):</span>
+                  <a
+                    href={`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/faltantes/exportar.xlsx`}
+                    className="text-sm font-bold text-black bg-[var(--gold)] hover:opacity-90 px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity whitespace-nowrap"
+                    title="Gera um único Excel com as notas faltantes (XML não encontrado no SPED) de todos os períodos já conciliados desta empresa."
+                  >
+                    <Download size={16} /> Excel
+                  </a>
+                  <a
+                    href={`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/faltantes/exportar.pdf`}
+                    className="text-sm font-bold text-[var(--gold)] border border-[var(--gold-border)] hover:bg-[var(--gold-glow)] px-4 py-2 rounded-lg flex items-center gap-2 transition-colors whitespace-nowrap"
+                    title="Gera um PDF formatado com as notas faltantes (XML não encontrado no SPED) de todos os períodos já conciliados desta empresa."
+                  >
+                    <FileText size={16} /> PDF
+                  </a>
+                </div>
               )}
             </div>
             {history.length === 0 ? (
