@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, FileText, Code, Zap, Calendar, AlertCircle, ChevronLeft, ChevronRight } from 'react-feather'
+import { ArrowLeft, FileText, Code, Zap, Calendar, AlertCircle, ChevronLeft, ChevronRight, Download } from 'react-feather'
 
 export default function CompanyDetailsPage() {
   const { id } = useParams()
@@ -441,9 +441,20 @@ export default function CompanyDetailsPage() {
 
           {/* Histórico de Conciliações */}
           <div className="mt-12">
-            <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2 mb-6">
-              <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
-            </h2>
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+              <h2 className="text-xl font-bold text-[var(--foreground)] flex items-center gap-2">
+                <Calendar size={20} className="text-[var(--gold)]" /> Histórico de Conciliações
+              </h2>
+              {history.length > 0 && (
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL}/conciliacoes/${id}/faltantes/exportar.xlsx`}
+                  className="text-sm font-bold text-black bg-[var(--gold)] hover:opacity-90 px-4 py-2 rounded-lg flex items-center gap-2 transition-opacity whitespace-nowrap"
+                  title="Gera um único Excel com as notas faltantes (XML não encontrado no SPED) de todos os períodos já conciliados desta empresa."
+                >
+                  <Download size={16} /> Exportar faltantes (todos os períodos)
+                </a>
+              )}
+            </div>
             {history.length === 0 ? (
               <div className="glass-card rounded-xl p-8 text-center text-[var(--foreground-muted)]">
                 Nenhuma conciliação processada para esta empresa ainda.
