@@ -212,7 +212,7 @@ def get_xml_summary(empresa_id: str, db: Session = Depends(get_db)):
     ]
 
 @router.get("/list")
-def list_xmls(empresa_id: str, mes: str = None, limit: int = 1000, db: Session = Depends(get_db)):
+def list_xmls(empresa_id: str, mes: str = None, limit: int = 100000, db: Session = Depends(get_db)):
     """
     Returns a list of XMLs for the given company, optionally filtered by month (YYYY-MM).
     """
